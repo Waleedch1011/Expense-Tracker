@@ -316,13 +316,38 @@ export default function Dashboard({ user, onLogout }) {
     return {location:loc,deposits:deps,withdraws:withs,netSavings:deps-withs,lastActivity:lastTx?.d||"—",openingBalance:op,totalBalance:op+deps-withs};
   }),[SAVINGS_DATA,settings]);
 
-  const MONTHLY_SUMMARY=useMemo(()=>["January","February","March","April","May","June","July","August","September","October","November","December"].map((month,mi)=>{
-    const txs=norm.filter(tx=>new Date(tx.d).getMonth()===mi);
-    let r={month,income:0,expense:0,loanGiven:0,loanTaken:0,loanRepaid:0,loanReceivedBack:0,officeExpense:0,personalExpense:0,transfer:0};
-    txs.forEach(tx=>{if(tx.t==="Income")r.income+=tx.a;else if(tx.t==="Expense"){r.expense+=tx.a;if(tx.g==="Office")r.officeExpense+=tx.a;else r.personalExpense+=tx.a;}else if(tx.t==="Loan Given")r.loanGiven+=tx.a;else if(tx.t==="Loan Taken")r.loanTaken+=tx.a;else if(tx.t==="Loan Repaid")r.loanRepaid+=tx.a;else if(tx.t==="Loan Received Back")r.loanReceivedBack+=tx.a;else if(tx.t==="Transfer")r.transfer+=tx.a;});
-    r.netMovement=r.income-r.expense; r.loanImpact=r.loanTaken-r.loanRepaid-r.loanGiven+r.loanReceivedBack; r.accountNet=r.netMovement+r.loanImpact; r.closingBalance=r.accountNet;
-    return r;
-  }),[norm]);
+  const MONTHLY_SUMMARY=useMemo(()=>{
+    const months=["January","February","March","April","May","June","July","August","September","October","November","December"];
+    // Total opening balance (sum of all account openings)
+    const totalOpening = settings.opening_balances.reduce((s,o)=>s+o.amount,0);
+    const rows = months.map((month,mi)=>{
+      const txs=norm.filter(tx=>new Date(tx.d).getMonth()===mi);
+      let r={month,income:0,expense:0,loanGiven:0,loanTaken:0,loanRepaid:0,loanReceivedBack:0,officeExpense:0,personalExpense:0,transfer:0,savingsDeposit:0};
+      txs.forEach(tx=>{
+        if(tx.t==="Income")r.income+=tx.a;
+        else if(tx.t==="Expense"){r.expense+=tx.a;if(tx.g==="Office")r.officeExpense+=tx.a;else r.personalExpense+=tx.a;}
+        else if(tx.t==="Loan Given")r.loanGiven+=tx.a;
+        else if(tx.t==="Loan Taken")r.loanTaken+=tx.a;
+        else if(tx.t==="Loan Repaid")r.loanRepaid+=tx.a;
+        else if(tx.t==="Loan Received Back")r.loanReceivedBack+=tx.a;
+        else if(tx.t==="Transfer")r.transfer+=tx.a;
+        else if(tx.t==="Savings Deposit")r.savingsDeposit+=tx.a;
+      });
+      r.netMovement=r.income-r.expense;
+      r.loanImpact=r.loanTaken-r.loanRepaid-r.loanGiven+r.loanReceivedBack;
+      r.accountNet=r.netMovement+r.loanImpact;
+      r.opening=0; r.closing=0; // filled below
+      return r;
+    });
+    // Calculate running opening/closing balances
+    let runningBalance = totalOpening;
+    rows.forEach(r=>{
+      r.opening = runningBalance;
+      r.closing = runningBalance + r.accountNet;
+      runningBalance = r.closing;
+    });
+    return rows;
+  },[norm, settings]);
 
   const EXPENSE_CATS=useMemo(()=>{const m={};norm.filter(tx=>tx.t==="Expense").forEach(tx=>{m[tx.c]=(m[tx.c]||0)+tx.a;});return Object.entries(m).sort((a,b)=>b[1]-a[1]).map(([c,a])=>({c,a}));},[norm]);
 
@@ -483,7 +508,7 @@ export default function Dashboard({ user, onLogout }) {
 
     {tab==="savings"&&<div style={cd}><ST icon="🏦">Savings Transactions</ST><TW><thead><tr>{["Date","Month","Type","Location","Amount"].map(h=><th key={h} style={thS}>{h}</th>)}</tr></thead><tbody>{SAVINGS_DATA.map((s,i)=><tr key={i}><td style={{...td,...mn,fontSize:11,color:"#94a3b8"}}>{s.d}</td><td style={{...td,fontWeight:500}}>{s.mo}</td><td style={td}><Bd text={s.t} color="#a78bfa" bg="rgba(139,92,246,.12)"/></td><td style={{...td,fontWeight:600}}>{s.loc}</td><td style={{...td,...mn,fontWeight:600,color:"#10b981"}}>{ff(s.a)}</td></tr>)}</tbody></TW><div style={{marginTop:16,padding:14,background:"rgba(139,92,246,.08)",borderRadius:12,border:"1px solid rgba(139,92,246,.15)",display:"flex",justifyContent:"space-between"}}><span style={{fontWeight:600,color:"#a78bfa"}}>Total Savings Deposited</span><span style={{...mn,fontWeight:700,color:"#10b981"}}>₨ {ff(SAVINGS_DATA.filter(s=>s.t==="Savings Deposit").reduce((s,x)=>s+x.a,0))}</span></div></div>}
 
-    {tab==="monthly"&&<div style={cd}><ST icon="📅">Monthly Summary (Jan–Dec)</ST><TW><thead><tr>{["Month","Income","Expense","Loan Given","Loan Taken","Loan Repaid","Loan Back","Net","Loan Impact","Acct Net","Office","Personal"].map(h=><th key={h} style={{...thS,fontSize:9}}>{h}</th>)}</tr></thead><tbody>{MONTHLY_SUMMARY.map((m,i)=><tr key={i} style={{opacity:m.income||m.expense?1:.4}}><td style={{...td,fontWeight:600}}>{m.month}</td><td style={{...td,...mn,fontSize:11,color:"#10b981"}}>{ff(m.income)}</td><td style={{...td,...mn,fontSize:11,color:"#f87171"}}>{ff(m.expense)}</td><td style={{...td,...mn,fontSize:11}}>{ff(m.loanGiven)}</td><td style={{...td,...mn,fontSize:11}}>{ff(m.loanTaken)}</td><td style={{...td,...mn,fontSize:11}}>{ff(m.loanRepaid)}</td><td style={{...td,...mn,fontSize:11}}>{ff(m.loanReceivedBack)}</td><td style={{...td,...mn,fontSize:11,fontWeight:700,color:m.netMovement>=0?"#10b981":"#f87171"}}>{ff(m.netMovement)}</td><td style={{...td,...mn,fontSize:11,color:m.loanImpact>=0?"#10b981":"#f87171"}}>{ff(m.loanImpact)}</td><td style={{...td,...mn,fontSize:11}}>{ff(m.accountNet)}</td><td style={{...td,...mn,fontSize:11,color:"#a5b4fc"}}>{ff(m.officeExpense)}</td><td style={{...td,...mn,fontSize:11,color:"#fbbf24"}}>{ff(m.personalExpense)}</td></tr>)}</tbody></TW></div>}
+    {tab==="monthly"&&<div style={cd}><ST icon="📅">Monthly Summary (Jan–Dec)</ST><TW><thead><tr>{["Month","Opening","Income","Expense","Net","Loan Impact","Acct Net","Closing","Office Exp","Personal Exp","Loan Given","Loan Taken","Loan Repaid","Loan Back"].map(h=><th key={h} style={{...thS,fontSize:9}}>{h}</th>)}</tr></thead><tbody>{MONTHLY_SUMMARY.map((m,i)=><tr key={i} style={{opacity:m.income||m.expense?1:.4}}><td style={{...td,fontWeight:600}}>{m.month}</td><td style={{...td,...mn,fontSize:11,color:"#64748b"}}>{ff(m.opening)}</td><td style={{...td,...mn,fontSize:11,color:"#10b981"}}>{ff(m.income)}</td><td style={{...td,...mn,fontSize:11,color:"#f87171"}}>{ff(m.expense)}</td><td style={{...td,...mn,fontSize:11,fontWeight:700,color:m.netMovement>=0?"#10b981":"#f87171"}}>{ff(m.netMovement)}</td><td style={{...td,...mn,fontSize:11,color:m.loanImpact>=0?"#10b981":"#f87171"}}>{ff(m.loanImpact)}</td><td style={{...td,...mn,fontSize:11}}>{ff(m.accountNet)}</td><td style={{...td,...mn,fontSize:11,fontWeight:700,color:m.closing>=0?"#10b981":"#f87171"}}>{ff(m.closing)}</td><td style={{...td,...mn,fontSize:11,color:"#a5b4fc"}}>{ff(m.officeExpense)}</td><td style={{...td,...mn,fontSize:11,color:"#fbbf24"}}>{ff(m.personalExpense)}</td><td style={{...td,...mn,fontSize:11}}>{ff(m.loanGiven)}</td><td style={{...td,...mn,fontSize:11}}>{ff(m.loanTaken)}</td><td style={{...td,...mn,fontSize:11}}>{ff(m.loanRepaid)}</td><td style={{...td,...mn,fontSize:11}}>{ff(m.loanReceivedBack)}</td></tr>)}</tbody></TW></div>}
 
     {tab==="accounts"&&<><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:12,marginBottom:20}}>{ACCOUNTS.map((a,i)=><div key={i} style={{...cd,position:"relative",overflow:"hidden"}}><div style={{position:"absolute",top:0,left:0,right:0,height:3,background:CL[i%CL.length]}}/><div style={{fontSize:15,fontWeight:700,marginBottom:10}}>{a.name}</div><div style={{fontSize:22,fontWeight:800,...mn,color:a.balance>0?"#10b981":"#ef4444",marginBottom:10}}>₨ {ff(a.balance)}</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,fontSize:10}}><div><span style={{color:"#64748b"}}>Opening</span><br/><span style={{color:"#94a3b8",...mn}}>{ff(a.opening)}</span></div><div><span style={{color:"#64748b"}}>Money In</span><br/><span style={{color:"#10b981",...mn}}>{fmt(a.moneyIn)}</span></div><div><span style={{color:"#64748b"}}>Money Out</span><br/><span style={{color:"#f87171",...mn}}>{fmt(a.moneyOut)}</span></div><div><span style={{color:"#64748b"}}>Change</span><br/><span style={{color:a.balance-a.opening>=0?"#10b981":"#f87171",...mn}}>{a.balance-a.opening>=0?"+":""}{ff(a.balance-a.opening)}</span></div></div></div>)}</div><div style={cd}><ST icon="📊">Account Balances Chart</ST><ResponsiveContainer width="100%" height={280}><BarChart data={ACCOUNTS.filter(a=>a.balance>0)}><CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,.05)"/><XAxis dataKey="name" tick={{fill:"#94a3b8",fontSize:11}}/><YAxis tick={{fill:"#64748b",fontSize:10}} tickFormatter={fmt}/><Tooltip contentStyle={ts} formatter={v=>"₨ "+ff(v)}/><Bar dataKey="balance" radius={[6,6,0,0]} name="Balance">{ACCOUNTS.filter(a=>a.balance>0).map((e,i)=><Cell key={i} fill={CL[i%CL.length]}/>)}</Bar></BarChart></ResponsiveContainer></div></>}
 
