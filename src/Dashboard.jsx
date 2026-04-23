@@ -318,7 +318,6 @@ export default function Dashboard({ user, onLogout }) {
 
   const MONTHLY_SUMMARY=useMemo(()=>{
     const months=["January","February","March","April","May","June","July","August","September","October","November","December"];
-    // Total opening balance (sum of all account openings)
     const totalOpening = settings.opening_balances.reduce((s,o)=>s+o.amount,0);
     const rows = months.map((month,mi)=>{
       const txs=norm.filter(tx=>new Date(tx.d).getMonth()===mi);
@@ -335,16 +334,29 @@ export default function Dashboard({ user, onLogout }) {
       });
       r.netMovement=r.income-r.expense;
       r.loanImpact=r.loanTaken-r.loanRepaid-r.loanGiven+r.loanReceivedBack;
-      r.accountNet=r.netMovement+r.loanImpact;
-      r.opening=0; r.closing=0; // filled below
+      r.opening=0; r.closing=0;
       return r;
     });
-    // Calculate running opening/closing balances
-    let runningBalance = totalOpening;
-    rows.forEach(r=>{
-      r.opening = runningBalance;
-      r.closing = runningBalance + r.accountNet;
-      runningBalance = r.closing;
+    // Closing = actual account balances up to end of that month
+    // Running balance from opening
+    const accounts = settings.accounts;
+    months.forEach((month, mi) => {
+      // Calculate actual total account balance at end of this month
+      const bal = {};
+      accounts.forEach(acc => {
+        const op = settings.opening_balances.find(o=>o.account===acc)?.amount||0;
+        bal[acc] = op;
+      });
+      // Apply all transactions up to end of this month
+      norm.filter(tx => new Date(tx.d).getMonth() <= mi).forEach(tx => {
+        if(tx.ta && bal[tx.ta]!==undefined){ bal[tx.ta] += tx.a; }
+        if(tx.fa && bal[tx.fa]!==undefined){ bal[tx.fa] -= tx.a; }
+      });
+      rows[mi].closing = Object.values(bal).reduce((s,v)=>s+v, 0);
+    });
+    // Opening of each month = closing of previous month
+    rows.forEach((r, i) => {
+      r.opening = i === 0 ? totalOpening : rows[i-1].closing;
     });
     return rows;
   },[norm, settings]);
