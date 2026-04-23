@@ -309,7 +309,7 @@ export default function Dashboard({ user, onLogout }) {
   },[norm,SAVINGS_SUMMARY,ACCOUNTS]);
 
   const mV=(v)=>hidden?"••••••":v;
-  const KPI=({label,value,sub,color,icon})=>(<div style={{...cd,position:"relative",overflow:"hidden",minHeight:95}}><div style={{position:"absolute",top:0,left:0,right:0,height:3,background:color,borderRadius:"16px 16px 0 0"}}/><div style={{fontSize:10,color:"#94a3b8",fontWeight:600,letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>{icon} {label}</div><div style={{fontSize:hidden?20:16,fontWeight:700,color:"#f1f5f9",...mn,lineHeight:1.3,whiteSpace:"nowrap"}}>{mV(value)}</div>{sub&&!hidden&&<div style={{fontSize:10,color:"#64748b",marginTop:3}}>{sub}</div>}</div>);
+  const KPI=({label,value,sub,color,icon})=>(<div style={{...cd,position:"relative",overflow:"hidden",minHeight:95}}><div style={{position:"absolute",top:0,left:0,right:0,height:3,background:color,borderRadius:"16px 16px 0 0"}}/><div style={{fontSize:11,color:"#94a3b8",fontWeight:600,letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>{icon} {label}</div><div style={{fontSize:hidden?24:28,fontWeight:800,color:"#f1f5f9",...mn,lineHeight:1.2,whiteSpace:"nowrap"}}>{mV(value)}</div>{sub&&!hidden&&<div style={{fontSize:11,color:"#64748b",marginTop:4}}>{sub}</div>}</div>);
   const ST=({children,icon})=><h3 style={{margin:"0 0 16px",fontSize:15,fontWeight:700,color:"#a78bfa"}}>{icon} {children}</h3>;
   const TW=({children})=><div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>{children}</table></div>;
   const Bd=({text,color,bg})=><span style={{padding:"3px 8px",borderRadius:6,fontSize:10,fontWeight:600,background:bg,color}}>{text}</span>;
