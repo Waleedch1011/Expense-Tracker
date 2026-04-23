@@ -180,10 +180,15 @@ export default function Dashboard({ user, onLogout }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const today = new Date().toISOString().slice(0,10);
+  // Transaction tab filters
+  const [txFilter, setTxFilter] = useState({type:'', category:'', group:'', account:'', search:''});
+  const [txSort, setTxSort] = useState({col:'d', dir:'desc'});
   const [fromDate, setFromDate] = useState("2026-04-01");
-  const [toDate, setToDate] = useState(today);
+  const [toDate, setToDate] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [hidden, setHidden] = useState(true);
+  const emptyRow = () => ({id:Date.now()+Math.random(), d:today,t:"Expense",c:"Food",g:"Personal",desc:"",a:"",fa:"Alfalah",ta:"",p:"",n:""});
+  const [rows, setRows] = useState([emptyRow()]);
   const [newTx, setNewTx] = useState({d:today,t:"Expense",c:"Food",g:"Personal",desc:"",a:"",fa:"Alfalah",ta:"",p:"",n:""});
 
   useEffect(() => { loadData(); }, []);
@@ -215,17 +220,20 @@ export default function Dashboard({ user, onLogout }) {
   };
 
   const handleAdd = async () => {
-    if (!newTx.a || !newTx.d) return;
+    const valid = rows.filter(r => r.a && r.d);
+    if (!valid.length) return;
     setSaving(true); setError("");
     try {
-      const {data: ins, error} = await supabase.from('transactions').insert({
-        user_id:user.id, d:newTx.d, t:newTx.t, c:newTx.c, g:newTx.g,
-        description:newTx.desc, a:parseFloat(newTx.a),
-        fa:newTx.fa||'', ta:newTx.ta||'', p:newTx.p||'', n:newTx.n||'',
-      }).select().single();
+      const {data: ins, error} = await supabase.from('transactions').insert(
+        valid.map(r => ({
+          user_id:user.id, d:r.d, t:r.t, c:r.c, g:r.g,
+          description:r.desc, a:parseFloat(r.a),
+          fa:r.fa||'', ta:r.ta||'', p:r.p||'', n:r.n||'',
+        }))
+      ).select();
       if (error) throw error;
-      setData(prev => [ins, ...prev]);
-      setNewTx({d:today,t:"Expense",c:"Food",g:"Personal",desc:"",a:"",fa:"Alfalah",ta:"",p:"",n:""});
+      setData(prev => [...(ins||[]).map(i=>({...i,desc:i.description||''})), ...prev]);
+      setRows([emptyRow()]);
       setShowAdd(false);
     } catch(err) { setError("Save failed: " + err.message); }
     finally { setSaving(false); }
@@ -351,16 +359,39 @@ export default function Dashboard({ user, onLogout }) {
     {error&&<div style={{marginBottom:16,padding:12,borderRadius:10,background:"rgba(239,68,68,.1)",border:"1px solid rgba(239,68,68,.2)",color:"#f87171",fontSize:12}}>⚠️ {error}</div>}
 
     {editTx&&<div style={{...cd,marginBottom:20,borderColor:"rgba(245,158,11,.4)",boxShadow:"0 0 40px rgba(245,158,11,.1)"}}><ST icon="✏️">Edit Transaction</ST><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:12,marginBottom:12}}>{[["Date","d","date"],["Type","t","select",settings.types],["Category","c","select",settings.categories],["Group","g","select",settings.groups],["Amount (PKR)","a","number"],["Description","desc","text"],["From Account","fa","select",["—",...settings.accounts]],["To Account","ta","select",["—",...settings.accounts]],["Party","p","select",["—",...settings.loan_people]],["Notes","n","text"]].map(([label,key,type,opts])=><div key={key}><label style={{fontSize:10,color:"#94a3b8",display:"block",marginBottom:5,fontWeight:600}}>{label}</label>{type==="select"?<select value={editTx[key]||''} onChange={e=>setEditTx({...editTx,[key]:e.target.value==="—"?"":e.target.value})} style={{...ip,width:"100%",boxSizing:"border-box"}}>{(opts||[]).map(o=><option key={o} value={o==="—"?"":o}>{o}</option>)}</select>:<input type={type} value={editTx[key]||''} onChange={e=>setEditTx({...editTx,[key]:e.target.value})} style={{...ip,width:"100%",boxSizing:"border-box"}}/>}</div>)}</div><div style={{display:"flex",gap:10}}><button onClick={handleEditSave} disabled={saving} style={{background:"linear-gradient(135deg,#f59e0b,#d97706)",border:"none",color:"#fff",padding:"10px 24px",borderRadius:10,cursor:saving?"wait":"pointer",fontWeight:700,fontSize:13,opacity:saving?.6:1}}>{saving?"Saving...":"Update"}</button><button onClick={()=>setEditTx(null)} style={{background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.1)",color:"#94a3b8",padding:"10px 24px",borderRadius:10,cursor:"pointer",fontWeight:600,fontSize:13}}>Cancel</button></div></div>}
-    {showAdd&&<div style={{...cd,marginBottom:20,borderColor:"rgba(99,102,241,.3)"}}><ST icon="✏️">New Transaction</ST>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:12,marginBottom:12}}>
-        {[["Date","d","date"],["Type","t","select",settings.types],["Category","c","select",settings.categories],["Group","g","select",settings.groups],["Amount (PKR)","a","number"],["Description","desc","text"],["From Account","fa","select",["—",...settings.accounts]],["To Account","ta","select",["—",...settings.accounts]],["Party","p","select",["—",...settings.loan_people]],["Notes","n","text"]].map(([label,key,type,opts])=>(
-          <div key={key}>
-            <label style={{fontSize:10,color:"#94a3b8",display:"block",marginBottom:5,fontWeight:600}}>{label}</label>
-            {type==="select"?<select value={newTx[key]} onChange={e=>setNewTx({...newTx,[key]:e.target.value==="—"?"":e.target.value})} style={{...ip,width:"100%",boxSizing:"border-box"}}>{opts.map(o=><option key={o} value={o==="—"?"":o}>{o}</option>)}</select>:<input type={type} placeholder={type==="number"?"0":"..."} value={newTx[key]} onChange={e=>setNewTx({...newTx,[key]:e.target.value})} style={{...ip,width:"100%",boxSizing:"border-box"}}/>}
+    {showAdd&&<div style={{...cd,marginBottom:20,borderColor:"rgba(99,102,241,.3)",boxShadow:"0 0 40px rgba(99,102,241,.08)"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+        <ST icon="✏️">Add Transactions ({rows.length} rows)</ST>
+        <button onClick={()=>{setRows(r=>[...r,emptyRow()]);}} style={{background:"rgba(99,102,241,.15)",border:"1px solid rgba(99,102,241,.3)",color:"#a78bfa",padding:"6px 14px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:600}}>+ Add Row</button>
+      </div>
+      {/* Column headers */}
+      <div style={{display:"grid",gridTemplateColumns:"110px 130px 130px 100px 110px 140px 110px 110px 110px 110px 30px",gap:6,marginBottom:6}}>
+        {["Date","Type","Category","Group","Amount","Description","From Acct","To Acct","Party","Notes",""].map(h=><div key={h} style={{fontSize:9,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,padding:"0 4px"}}>{h}</div>)}
+      </div>
+      {/* Rows */}
+      <div style={{display:"flex",flexDirection:"column",gap:6,maxHeight:400,overflowY:"auto"}}>
+        {rows.map((row,ri)=>(
+          <div key={row.id} style={{display:"grid",gridTemplateColumns:"110px 130px 130px 100px 110px 140px 110px 110px 110px 110px 30px",gap:6,alignItems:"center",padding:"6px 8px",background:"rgba(255,255,255,.02)",borderRadius:8,border:"1px solid rgba(255,255,255,.04)"}}>
+            {[["d","date"],["t","select",settings.types],["c","select",settings.categories],["g","select",settings.groups],["a","number"],["desc","text"],["fa","select",["—",...settings.accounts]],["ta","select",["—",...settings.accounts]],["p","select",["—",...settings.loan_people]],["n","text"]].map(([key,type,opts])=>(
+              <div key={key}>
+                {type==="select"
+                  ?<select value={row[key]||''} onChange={e=>{const v=e.target.value==="—"?"":e.target.value;setRows(rs=>rs.map((r,i)=>i===ri?{...r,[key]:v}:r))}} style={{...ip,padding:"6px 8px",fontSize:11,width:"100%",boxSizing:"border-box"}}>{(opts||[]).map(o=><option key={o} value={o==="—"?"":o}>{o}</option>)}</select>
+                  :<input type={type} placeholder={key==="a"?"Amount":key==="d"?"Date":"..."} value={row[key]||''} onChange={e=>{const v=e.target.value;setRows(rs=>rs.map((r,i)=>i===ri?{...r,[key]:v}:r))}} style={{...ip,padding:"6px 8px",fontSize:11,width:"100%",boxSizing:"border-box"}}/>
+                }
+              </div>
+            ))}
+            <button onClick={()=>setRows(rs=>rs.length===1?rs:rs.filter((_,i)=>i!==ri))} style={{background:"rgba(239,68,68,.1)",border:"1px solid rgba(239,68,68,.2)",color:"#f87171",padding:"4px",borderRadius:6,cursor:"pointer",fontSize:12,textAlign:"center"}}>✕</button>
           </div>
         ))}
       </div>
-      <div style={{marginTop:14,display:"flex",gap:10}}><button onClick={handleAdd} disabled={saving} style={{background:"linear-gradient(135deg,#6366f1,#8b5cf6)",border:"none",color:"#fff",padding:"10px 24px",borderRadius:10,cursor:saving?"wait":"pointer",fontWeight:700,fontSize:13,opacity:saving?.6:1}}>{saving?"Saving...":"Save"}</button><button onClick={()=>setShowAdd(false)} style={{background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.1)",color:"#94a3b8",padding:"10px 24px",borderRadius:10,cursor:"pointer",fontWeight:600,fontSize:13}}>Cancel</button></div>
+      <div style={{marginTop:14,display:"flex",gap:10,alignItems:"center"}}>
+        <button onClick={handleAdd} disabled={saving} style={{background:"linear-gradient(135deg,#6366f1,#8b5cf6)",border:"none",color:"#fff",padding:"10px 28px",borderRadius:10,cursor:saving?"wait":"pointer",fontWeight:700,fontSize:13,opacity:saving?.6:1,boxShadow:"0 4px 20px rgba(99,102,241,.3)"}}>
+          {saving?`Saving ${rows.filter(r=>r.a&&r.d).length} transactions...`:`💾 Save All (${rows.filter(r=>r.a&&r.d).length})`}
+        </button>
+        <button onClick={()=>setRows(r=>[...r,emptyRow()])} style={{background:"rgba(16,185,129,.1)",border:"1px solid rgba(16,185,129,.2)",color:"#10b981",padding:"10px 18px",borderRadius:10,cursor:"pointer",fontWeight:600,fontSize:13}}>+ Row</button>
+        <button onClick={()=>{setShowAdd(false);setRows([emptyRow()]);}} style={{background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.1)",color:"#94a3b8",padding:"10px 18px",borderRadius:10,cursor:"pointer",fontWeight:600,fontSize:13}}>Cancel</button>
+        <span style={{fontSize:11,color:"#475569"}}>{rows.filter(r=>!r.a||!r.d).length>0&&`⚠️ ${rows.filter(r=>!r.a||!r.d).length} rows missing amount/date`}</span>
+      </div>
     </div>}
     <div style={{display:"flex",gap:10,marginBottom:18,alignItems:"center",flexWrap:"wrap"}}>
       {[["FROM",fromDate,setFromDate],["TO",toDate,setToDate]].map(([l,v,s])=><div key={l} style={{display:"flex",alignItems:"center",gap:6,background:"rgba(255,255,255,.03)",padding:"6px 14px",borderRadius:10,border:"1px solid rgba(255,255,255,.06)"}}><span style={{fontSize:11,color:"#94a3b8",fontWeight:700}}>{l}</span><input type="date" value={v} onChange={e=>s(e.target.value)} style={{...ip,width:"auto",padding:"4px 8px",background:"transparent",border:"none"}}/></div>)}
@@ -384,7 +415,68 @@ export default function Dashboard({ user, onLogout }) {
       </div>
     </>}
 
-    {tab==="transactions"&&<div style={cd}><ST icon="📋">All Transactions ({filtered.length})</ST><TW><thead><tr>{["Date","Type","Category","Group","Description","Amount","From","To","Party","Notes",""].map(h=><th key={h} style={thS}>{h}</th>)}</tr></thead><tbody>{[...filtered].sort((a,b)=>b.d.localeCompare(a.d)).map((tx,i)=><tr key={tx.id||i} onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,.02)"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}><td style={{...td,...mn,fontSize:11,color:"#94a3b8"}}>{tx.d.slice(5)}</td><td style={td}><Bd text={tx.t} color={tC(tx.t)} bg={tB(tx.t)}/></td><td style={{...td,fontWeight:500}}>{tx.c}</td><td style={td}><Bd text={tx.g} color={tx.g==="Office"?"#a5b4fc":"#fbbf24"} bg={tx.g==="Office"?"rgba(99,102,241,.12)":"rgba(245,158,11,.12)"}/></td><td style={{...td,color:"#94a3b8",maxWidth:160,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{tx.desc||"—"}</td><td style={{...td,...mn,fontWeight:600,color:tC(tx.t)}}>{ff(tx.a)}</td><td style={{...td,fontSize:11,color:"#64748b"}}>{tx.fa||"—"}</td><td style={{...td,fontSize:11,color:"#64748b"}}>{tx.ta||"—"}</td><td style={{...td,fontSize:11,color:"#a78bfa"}}>{tx.p||"—"}</td><td style={{...td,fontSize:10,color:"#475569"}}>{tx.n||"—"}</td><td style={td}>{tx.id&&<div style={{display:"flex",gap:4}}><button onClick={()=>handleEditOpen(tx)} style={{background:"rgba(245,158,11,.1)",border:"1px solid rgba(245,158,11,.2)",color:"#fbbf24",padding:"3px 8px",borderRadius:6,cursor:"pointer",fontSize:10}}>✎</button><button onClick={()=>handleDelete(tx.id)} style={{background:"rgba(239,68,68,.1)",border:"1px solid rgba(239,68,68,.2)",color:"#f87171",padding:"3px 8px",borderRadius:6,cursor:"pointer",fontSize:10}}>✕</button></div>}</td></tr>)}</tbody></TW></div>}
+    {tab==="transactions"&&(()=>{
+      const sf=ip => ip.toLowerCase();
+      let txList = [...filtered];
+      if(txFilter.type) txList=txList.filter(tx=>tx.t===txFilter.type);
+      if(txFilter.category) txList=txList.filter(tx=>tx.c===txFilter.category);
+      if(txFilter.group) txList=txList.filter(tx=>tx.g===txFilter.group);
+      if(txFilter.account) txList=txList.filter(tx=>tx.fa===txFilter.account||tx.ta===txFilter.account);
+      if(txFilter.search) txList=txList.filter(tx=>sf(tx.desc||'').includes(sf(txFilter.search))||sf(tx.c).includes(sf(txFilter.search))||sf(tx.p||'').includes(sf(txFilter.search))||sf(tx.n||'').includes(sf(txFilter.search)));
+      const sortDir = txSort.dir==='asc'?1:-1;
+      txList.sort((a,b)=>{
+        if(txSort.col==='d') return sortDir*a.d.localeCompare(b.d);
+        if(txSort.col==='a') return sortDir*(a.a-b.a);
+        if(txSort.col==='t') return sortDir*a.t.localeCompare(b.t);
+        if(txSort.col==='c') return sortDir*a.c.localeCompare(b.c);
+        return 0;
+      });
+      const SortBtn=({col,label})=><span onClick={()=>setTxSort(s=>({col,dir:s.col===col&&s.dir==='desc'?'asc':'desc'}))} style={{cursor:'pointer',userSelect:'none',color:txSort.col===col?'#a78bfa':'#64748b'}}>{label} {txSort.col===col?(txSort.dir==='desc'?'↓':'↑'):'↕'}</span>;
+      const selSt={...ip,padding:'6px 10px',fontSize:11,width:'auto'};
+      return <div style={cd}>
+        <ST icon="📋">Transactions ({txList.length})</ST>
+        <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:16,padding:14,background:'rgba(255,255,255,.02)',borderRadius:12,border:'1px solid rgba(255,255,255,.05)'}}>
+          <input placeholder="🔍 Search..." value={txFilter.search} onChange={e=>setTxFilter({...txFilter,search:e.target.value})} style={{...ip,width:160,padding:'6px 10px',fontSize:11}}/>
+          <select value={txFilter.type} onChange={e=>setTxFilter({...txFilter,type:e.target.value})} style={selSt}><option value="">All Types</option>{settings.types.map(t=><option key={t}>{t}</option>)}</select>
+          <select value={txFilter.category} onChange={e=>setTxFilter({...txFilter,category:e.target.value})} style={selSt}><option value="">All Categories</option>{settings.categories.map(c=><option key={c}>{c}</option>)}</select>
+          <select value={txFilter.group} onChange={e=>setTxFilter({...txFilter,group:e.target.value})} style={selSt}><option value="">All Groups</option>{settings.groups.map(g=><option key={g}>{g}</option>)}</select>
+          <select value={txFilter.account} onChange={e=>setTxFilter({...txFilter,account:e.target.value})} style={selSt}><option value="">All Accounts</option>{settings.accounts.map(a=><option key={a}>{a}</option>)}</select>
+          {(txFilter.type||txFilter.category||txFilter.group||txFilter.account||txFilter.search)&&<button onClick={()=>setTxFilter({type:'',category:'',group:'',account:'',search:''})} style={{background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.2)',color:'#f87171',padding:'6px 12px',borderRadius:8,cursor:'pointer',fontSize:11,fontWeight:600}}>✕ Clear</button>}
+          <span style={{fontSize:11,color:'#475569',display:'flex',alignItems:'center',...mn}}>{txList.length} results</span>
+        </div>
+        <TW>
+          <thead><tr>
+            <th style={thS}><SortBtn col="d" label="Date"/></th>
+            <th style={thS}><SortBtn col="t" label="Type"/></th>
+            <th style={thS}><SortBtn col="c" label="Category"/></th>
+            <th style={thS}>Group</th>
+            <th style={thS}>Description</th>
+            <th style={thS}><SortBtn col="a" label="Amount"/></th>
+            <th style={thS}>From</th>
+            <th style={thS}>To</th>
+            <th style={thS}>Party</th>
+            <th style={thS}>Notes</th>
+            <th style={thS}></th>
+          </tr></thead>
+          <tbody>{txList.map((tx,i)=><tr key={tx.id||i} onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,.02)"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+            <td style={{...td,...mn,fontSize:11,color:"#94a3b8"}}>{tx.d}</td>
+            <td style={td}><Bd text={tx.t} color={tC(tx.t)} bg={tB(tx.t)}/></td>
+            <td style={{...td,fontWeight:500}}>{tx.c}</td>
+            <td style={td}><Bd text={tx.g} color={tx.g==="Office"?"#a5b4fc":"#fbbf24"} bg={tx.g==="Office"?"rgba(99,102,241,.12)":"rgba(245,158,11,.12)"}/></td>
+            <td style={{...td,color:"#94a3b8",maxWidth:140,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{tx.desc||"—"}</td>
+            <td style={{...td,...mn,fontWeight:600,color:tC(tx.t)}}>{ff(tx.a)}</td>
+            <td style={{...td,fontSize:11,color:"#64748b"}}>{tx.fa||"—"}</td>
+            <td style={{...td,fontSize:11,color:"#64748b"}}>{tx.ta||"—"}</td>
+            <td style={{...td,fontSize:11,color:"#a78bfa"}}>{tx.p||"—"}</td>
+            <td style={{...td,fontSize:10,color:"#475569"}}>{tx.n||"—"}</td>
+            <td style={td}>{tx.id&&<div style={{display:"flex",gap:4}}>
+              <button onClick={()=>handleEditOpen(tx)} style={{background:"rgba(245,158,11,.1)",border:"1px solid rgba(245,158,11,.2)",color:"#fbbf24",padding:"3px 8px",borderRadius:6,cursor:"pointer",fontSize:10}}>✎</button>
+              <button onClick={()=>handleDelete(tx.id)} style={{background:"rgba(239,68,68,.1)",border:"1px solid rgba(239,68,68,.2)",color:"#f87171",padding:"3px 8px",borderRadius:6,cursor:"pointer",fontSize:10}}>✕</button>
+            </div>}</td>
+          </tr>)}</tbody>
+        </TW>
+      </div>;
+    })()}
 
     {tab==="savings"&&<div style={cd}><ST icon="🏦">Savings Transactions</ST><TW><thead><tr>{["Date","Month","Type","Location","Amount"].map(h=><th key={h} style={thS}>{h}</th>)}</tr></thead><tbody>{SAVINGS_DATA.map((s,i)=><tr key={i}><td style={{...td,...mn,fontSize:11,color:"#94a3b8"}}>{s.d}</td><td style={{...td,fontWeight:500}}>{s.mo}</td><td style={td}><Bd text={s.t} color="#a78bfa" bg="rgba(139,92,246,.12)"/></td><td style={{...td,fontWeight:600}}>{s.loc}</td><td style={{...td,...mn,fontWeight:600,color:"#10b981"}}>{ff(s.a)}</td></tr>)}</tbody></TW><div style={{marginTop:16,padding:14,background:"rgba(139,92,246,.08)",borderRadius:12,border:"1px solid rgba(139,92,246,.15)",display:"flex",justifyContent:"space-between"}}><span style={{fontWeight:600,color:"#a78bfa"}}>Total Savings Deposited</span><span style={{...mn,fontWeight:700,color:"#10b981"}}>₨ {ff(SAVINGS_DATA.filter(s=>s.t==="Savings Deposit").reduce((s,x)=>s+x.a,0))}</span></div></div>}
 
