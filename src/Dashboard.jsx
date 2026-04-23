@@ -240,6 +240,27 @@ export default function Dashboard({ user, onLogout }) {
     } catch(err) { setError("Delete failed: " + err.message); }
   };
 
+  const [editTx, setEditTx] = useState(null);
+  const handleEditOpen = (tx) => {
+    setEditTx({...tx, desc: tx.description||tx.desc||'', a: String(tx.a)});
+    window.scrollTo({top:0, behavior:'smooth'});
+  };
+  const handleEditSave = async () => {
+    if (!editTx.a || !editTx.d) return;
+    setSaving(true); setError("");
+    try {
+      const {error} = await supabase.from('transactions').update({
+        d:editTx.d, t:editTx.t, c:editTx.c, g:editTx.g,
+        description:editTx.desc, a:parseFloat(editTx.a),
+        fa:editTx.fa||'', ta:editTx.ta||'', p:editTx.p||'', n:editTx.n||'',
+      }).eq('id', editTx.id);
+      if (error) throw error;
+      setData(prev => prev.map(tx => tx.id===editTx.id ? {...tx, ...editTx, description:editTx.desc, a:parseFloat(editTx.a)} : tx));
+      setEditTx(null);
+    } catch(err) { setError("Update failed: " + err.message); }
+    finally { setSaving(false); }
+  };
+
   const norm = useMemo(() => data.map(tx => ({...tx, desc:tx.description||tx.desc||'', a:parseFloat(tx.a)||0})), [data]);
   const filtered = useMemo(() => norm.filter(tx => { if(fromDate&&tx.d<fromDate)return false; if(toDate&&tx.d>toDate)return false; return true; }), [norm,fromDate,toDate]);
 
@@ -328,6 +349,8 @@ export default function Dashboard({ user, onLogout }) {
       </div>
     </div>
     {error&&<div style={{marginBottom:16,padding:12,borderRadius:10,background:"rgba(239,68,68,.1)",border:"1px solid rgba(239,68,68,.2)",color:"#f87171",fontSize:12}}>⚠️ {error}</div>}
+
+    {editTx&&<div style={{...cd,marginBottom:20,borderColor:"rgba(245,158,11,.4)",boxShadow:"0 0 40px rgba(245,158,11,.1)"}}><ST icon="✏️">Edit Transaction</ST><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:12,marginBottom:12}}>{[["Date","d","date"],["Type","t","select",settings.types],["Category","c","select",settings.categories],["Group","g","select",settings.groups],["Amount (PKR)","a","number"],["Description","desc","text"],["From Account","fa","select",["—",...settings.accounts]],["To Account","ta","select",["—",...settings.accounts]],["Party","p","select",["—",...settings.loan_people]],["Notes","n","text"]].map(([label,key,type,opts])=><div key={key}><label style={{fontSize:10,color:"#94a3b8",display:"block",marginBottom:5,fontWeight:600}}>{label}</label>{type==="select"?<select value={editTx[key]||''} onChange={e=>setEditTx({...editTx,[key]:e.target.value==="—"?"":e.target.value})} style={{...ip,width:"100%",boxSizing:"border-box"}}>{(opts||[]).map(o=><option key={o} value={o==="—"?"":o}>{o}</option>)}</select>:<input type={type} value={editTx[key]||''} onChange={e=>setEditTx({...editTx,[key]:e.target.value})} style={{...ip,width:"100%",boxSizing:"border-box"}}/>}</div>)}</div><div style={{display:"flex",gap:10}}><button onClick={handleEditSave} disabled={saving} style={{background:"linear-gradient(135deg,#f59e0b,#d97706)",border:"none",color:"#fff",padding:"10px 24px",borderRadius:10,cursor:saving?"wait":"pointer",fontWeight:700,fontSize:13,opacity:saving?.6:1}}>{saving?"Saving...":"Update"}</button><button onClick={()=>setEditTx(null)} style={{background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.1)",color:"#94a3b8",padding:"10px 24px",borderRadius:10,cursor:"pointer",fontWeight:600,fontSize:13}}>Cancel</button></div></div>}
     {showAdd&&<div style={{...cd,marginBottom:20,borderColor:"rgba(99,102,241,.3)"}}><ST icon="✏️">New Transaction</ST>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:12,marginBottom:12}}>
         {[["Date","d","date"],["Type","t","select",settings.types],["Category","c","select",settings.categories],["Group","g","select",settings.groups],["Amount (PKR)","a","number"],["Description","desc","text"],["From Account","fa","select",["—",...settings.accounts]],["To Account","ta","select",["—",...settings.accounts]],["Party","p","select",["—",...settings.loan_people]],["Notes","n","text"]].map(([label,key,type,opts])=>(
@@ -361,7 +384,7 @@ export default function Dashboard({ user, onLogout }) {
       </div>
     </>}
 
-    {tab==="transactions"&&<div style={cd}><ST icon="📋">All Transactions ({filtered.length})</ST><TW><thead><tr>{["Date","Type","Category","Group","Description","Amount","From","To","Party","Notes",""].map(h=><th key={h} style={thS}>{h}</th>)}</tr></thead><tbody>{[...filtered].sort((a,b)=>b.d.localeCompare(a.d)).map((tx,i)=><tr key={tx.id||i} onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,.02)"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}><td style={{...td,...mn,fontSize:11,color:"#94a3b8"}}>{tx.d.slice(5)}</td><td style={td}><Bd text={tx.t} color={tC(tx.t)} bg={tB(tx.t)}/></td><td style={{...td,fontWeight:500}}>{tx.c}</td><td style={td}><Bd text={tx.g} color={tx.g==="Office"?"#a5b4fc":"#fbbf24"} bg={tx.g==="Office"?"rgba(99,102,241,.12)":"rgba(245,158,11,.12)"}/></td><td style={{...td,color:"#94a3b8",maxWidth:160,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{tx.desc||"—"}</td><td style={{...td,...mn,fontWeight:600,color:tC(tx.t)}}>{ff(tx.a)}</td><td style={{...td,fontSize:11,color:"#64748b"}}>{tx.fa||"—"}</td><td style={{...td,fontSize:11,color:"#64748b"}}>{tx.ta||"—"}</td><td style={{...td,fontSize:11,color:"#a78bfa"}}>{tx.p||"—"}</td><td style={{...td,fontSize:10,color:"#475569"}}>{tx.n||"—"}</td><td style={td}>{tx.id&&<button onClick={()=>handleDelete(tx.id)} style={{background:"rgba(239,68,68,.1)",border:"1px solid rgba(239,68,68,.2)",color:"#f87171",padding:"3px 8px",borderRadius:6,cursor:"pointer",fontSize:10}}>✕</button>}</td></tr>)}</tbody></TW></div>}
+    {tab==="transactions"&&<div style={cd}><ST icon="📋">All Transactions ({filtered.length})</ST><TW><thead><tr>{["Date","Type","Category","Group","Description","Amount","From","To","Party","Notes",""].map(h=><th key={h} style={thS}>{h}</th>)}</tr></thead><tbody>{[...filtered].sort((a,b)=>b.d.localeCompare(a.d)).map((tx,i)=><tr key={tx.id||i} onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,.02)"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}><td style={{...td,...mn,fontSize:11,color:"#94a3b8"}}>{tx.d.slice(5)}</td><td style={td}><Bd text={tx.t} color={tC(tx.t)} bg={tB(tx.t)}/></td><td style={{...td,fontWeight:500}}>{tx.c}</td><td style={td}><Bd text={tx.g} color={tx.g==="Office"?"#a5b4fc":"#fbbf24"} bg={tx.g==="Office"?"rgba(99,102,241,.12)":"rgba(245,158,11,.12)"}/></td><td style={{...td,color:"#94a3b8",maxWidth:160,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{tx.desc||"—"}</td><td style={{...td,...mn,fontWeight:600,color:tC(tx.t)}}>{ff(tx.a)}</td><td style={{...td,fontSize:11,color:"#64748b"}}>{tx.fa||"—"}</td><td style={{...td,fontSize:11,color:"#64748b"}}>{tx.ta||"—"}</td><td style={{...td,fontSize:11,color:"#a78bfa"}}>{tx.p||"—"}</td><td style={{...td,fontSize:10,color:"#475569"}}>{tx.n||"—"}</td><td style={td}>{tx.id&&<div style={{display:"flex",gap:4}}><button onClick={()=>handleEditOpen(tx)} style={{background:"rgba(245,158,11,.1)",border:"1px solid rgba(245,158,11,.2)",color:"#fbbf24",padding:"3px 8px",borderRadius:6,cursor:"pointer",fontSize:10}}>✎</button><button onClick={()=>handleDelete(tx.id)} style={{background:"rgba(239,68,68,.1)",border:"1px solid rgba(239,68,68,.2)",color:"#f87171",padding:"3px 8px",borderRadius:6,cursor:"pointer",fontSize:10}}>✕</button></div>}</td></tr>)}</tbody></TW></div>}
 
     {tab==="savings"&&<div style={cd}><ST icon="🏦">Savings Transactions</ST><TW><thead><tr>{["Date","Month","Type","Location","Amount"].map(h=><th key={h} style={thS}>{h}</th>)}</tr></thead><tbody>{SAVINGS_DATA.map((s,i)=><tr key={i}><td style={{...td,...mn,fontSize:11,color:"#94a3b8"}}>{s.d}</td><td style={{...td,fontWeight:500}}>{s.mo}</td><td style={td}><Bd text={s.t} color="#a78bfa" bg="rgba(139,92,246,.12)"/></td><td style={{...td,fontWeight:600}}>{s.loc}</td><td style={{...td,...mn,fontWeight:600,color:"#10b981"}}>{ff(s.a)}</td></tr>)}</tbody></TW><div style={{marginTop:16,padding:14,background:"rgba(139,92,246,.08)",borderRadius:12,border:"1px solid rgba(139,92,246,.15)",display:"flex",justifyContent:"space-between"}}><span style={{fontWeight:600,color:"#a78bfa"}}>Total Savings Deposited</span><span style={{...mn,fontWeight:700,color:"#10b981"}}>₨ {ff(SAVINGS_DATA.filter(s=>s.t==="Savings Deposit").reduce((s,x)=>s+x.a,0))}</span></div></div>}
 
