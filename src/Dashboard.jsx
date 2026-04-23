@@ -182,7 +182,7 @@ export default function Dashboard({ user, onLogout }) {
   const today = new Date().toISOString().slice(0,10);
   // Transaction tab filters
   const [txFilter, setTxFilter] = useState({type:'', category:'', group:'', account:'', search:''});
-  const [txSort, setTxSort] = useState({col:'d', dir:'desc'});
+  const [txSort, setTxSort] = useState({col:'created_at', dir:'desc'});
   const [fromDate, setFromDate] = useState("2026-04-01");
   const [toDate, setToDate] = useState("");
   const [showAdd, setShowAdd] = useState(false);
@@ -197,7 +197,7 @@ export default function Dashboard({ user, onLogout }) {
     setLoading(true); setError("");
     try {
       const [txR, stR] = await Promise.all([
-        supabase.from('transactions').select('*').order('d', {ascending:false}),
+        supabase.from('transactions').select('*').order('d', {ascending:false}).order('created_at', {ascending:false}),
         supabase.from('user_settings').select('*').maybeSingle(),
       ]);
       if (txR.error) throw txR.error;
@@ -425,6 +425,7 @@ export default function Dashboard({ user, onLogout }) {
       if(txFilter.search) txList=txList.filter(tx=>sf(tx.desc||'').includes(sf(txFilter.search))||sf(tx.c).includes(sf(txFilter.search))||sf(tx.p||'').includes(sf(txFilter.search))||sf(tx.n||'').includes(sf(txFilter.search)));
       const sortDir = txSort.dir==='asc'?1:-1;
       txList.sort((a,b)=>{
+        if(txSort.col==='created_at') return sortDir*((a.created_at||'').localeCompare(b.created_at||''));
         if(txSort.col==='d') return sortDir*a.d.localeCompare(b.d);
         if(txSort.col==='a') return sortDir*(a.a-b.a);
         if(txSort.col==='t') return sortDir*a.t.localeCompare(b.t);
@@ -447,6 +448,7 @@ export default function Dashboard({ user, onLogout }) {
         <TW>
           <thead><tr>
             <th style={thS}><SortBtn col="d" label="Date"/></th>
+            <th style={thS}><SortBtn col="created_at" label="Added"/></th>
             <th style={thS}><SortBtn col="t" label="Type"/></th>
             <th style={thS}><SortBtn col="c" label="Category"/></th>
             <th style={thS}>Group</th>
@@ -460,6 +462,7 @@ export default function Dashboard({ user, onLogout }) {
           </tr></thead>
           <tbody>{txList.map((tx,i)=><tr key={tx.id||i} onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,.02)"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
             <td style={{...td,...mn,fontSize:11,color:"#94a3b8"}}>{tx.d}</td>
+            <td style={{...td,...mn,fontSize:10,color:"#475569"}}>{tx.created_at?new Date(tx.created_at).toLocaleString('en-PK',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:true}):"—"}</td>
             <td style={td}><Bd text={tx.t} color={tC(tx.t)} bg={tB(tx.t)}/></td>
             <td style={{...td,fontWeight:500}}>{tx.c}</td>
             <td style={td}><Bd text={tx.g} color={tx.g==="Office"?"#a5b4fc":"#fbbf24"} bg={tx.g==="Office"?"rgba(99,102,241,.12)":"rgba(245,158,11,.12)"}/></td>
