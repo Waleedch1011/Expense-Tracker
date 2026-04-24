@@ -366,6 +366,129 @@ export default function Dashboard({ user, onLogout }) {
     const totalAccountBal = ACCOUNTS.reduce((s,a)=>s+a.balance,0);
     const totalSavings = SAVINGS_SUMMARY.reduce((s,x)=>s+x.totalBalance,0);
     const netWorth = totalAccountBal + totalSavings;
+    const catExp = {};
+    filtered.filter(tx=>tx.t==="Expense").forEach(tx=>{catExp[tx.c]=(catExp[tx.c]||0)+tx.a;});
+    const catList = Object.entries(catExp).sort((a,b)=>b[1]-a[1]);
+    const totalExp = catList.reduce((s,[,v])=>s+v,0);
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8"/>
+<title>Expense Report — ${dateLabel}</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:'Segoe UI',Arial,sans-serif;background:#fff;color:#1a1a2e;padding:28px;font-size:13px;}
+  h1{font-size:24px;font-weight:800;color:#6366f1;margin-bottom:4px;}
+  .subtitle{color:#64748b;font-size:12px;margin-bottom:20px;}
+  .section{margin-bottom:24px;}
+  .section-title{font-size:14px;font-weight:700;color:#6366f1;border-bottom:2px solid #e0e7ff;padding-bottom:5px;margin-bottom:12px;}
+  .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:8px;}
+  .kpi{background:#f8faff;border:1px solid #e0e7ff;border-radius:8px;padding:12px;}
+  .kpi-label{font-size:9px;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;font-weight:600;margin-bottom:5px;}
+  .kpi-value{font-size:18px;font-weight:800;color:#1e293b;font-family:monospace;}
+  .green{color:#10b981;} .red{color:#ef4444;} .purple{color:#6366f1;} .blue{color:#06b6d4;}
+  table{width:100%;border-collapse:collapse;font-size:11px;}
+  th{background:#f1f5f9;padding:7px 8px;text-align:left;font-weight:700;font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:#64748b;border-bottom:2px solid #e2e8f0;}
+  td{padding:7px 8px;border-bottom:1px solid #f1f5f9;}
+  .bar-wrap{background:#f1f5f9;border-radius:4px;height:7px;width:100%;margin-top:3px;}
+  .bar{height:7px;border-radius:4px;background:linear-gradient(90deg,#6366f1,#a78bfa);}
+  .amount{font-family:monospace;font-weight:600;}
+  .badge{display:inline-block;padding:1px 6px;border-radius:4px;font-size:9px;font-weight:600;}
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .box{background:#f8faff;border:1px solid #e0e7ff;border-radius:8px;padding:12px;}
+  .row{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #f1f5f9;}
+  .footer{text-align:center;color:#94a3b8;font-size:10px;margin-top:24px;border-top:1px solid #e2e8f0;padding-top:12px;}
+  @media print{body{padding:16px;}}
+</style>
+</head>
+<body>
+<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;">
+  <div>
+    <h1>💰 Expense Report</h1>
+    <div class="subtitle">Waleed's Finance Tracker &nbsp;•&nbsp; Period: <strong>${dateLabel}</strong> &nbsp;•&nbsp; ${filtered.length} transactions</div>
+  </div>
+  <div style="text-align:right;color:#94a3b8;font-size:10px;">Generated: ${new Date().toLocaleString('en-PK')}</div>
+</div>
+<div class="section">
+  <div class="section-title">📊 Financial Summary</div>
+  <div class="kpi-grid">
+    <div class="kpi"><div class="kpi-label">💰 Total Income</div><div class="kpi-value green">₨ ${ff(stats.income)}</div></div>
+    <div class="kpi"><div class="kpi-label">💸 Total Expense</div><div class="kpi-value red">₨ ${ff(stats.expense)}</div></div>
+    <div class="kpi"><div class="kpi-label">📈 Net Balance</div><div class="kpi-value ${stats.net>=0?'green':'red'}">₨ ${ff(stats.net)}</div></div>
+    <div class="kpi"><div class="kpi-label">💎 Total Savings</div><div class="kpi-value purple">₨ ${ff(stats.savings)}</div></div>
+  </div>
+  <div class="kpi-grid">
+    <div class="kpi"><div class="kpi-label">🏧 Account Balance</div><div class="kpi-value blue">₨ ${ff(totalAccountBal)}</div></div>
+    <div class="kpi"><div class="kpi-label">📤 Others Owe Me</div><div class="kpi-value green">₨ ${ff(LOANS.filter(l=>l.net>0).reduce((s,l)=>s+l.net,0))}</div></div>
+    <div class="kpi"><div class="kpi-label">📥 I Owe Others</div><div class="kpi-value red">₨ ${ff(Math.abs(LOANS.filter(l=>l.net<0).reduce((s,l)=>s+l.net,0)))}</div></div>
+    <div class="kpi"><div class="kpi-label">🌟 Net Worth</div><div class="kpi-value ${netWorth>=0?'green':'red'}">₨ ${ff(netWorth)}</div></div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-title">🏷️ Expense by Category</div>
+  <table><thead><tr><th>#</th><th>Category</th><th>Amount</th><th>% of Total</th><th style="width:180px;">Bar</th></tr></thead>
+  <tbody>
+    ${catList.map(([cat,amt],i)=>`<tr><td style="color:#94a3b8;">${i+1}</td><td style="font-weight:600;">${cat}</td><td class="amount red">₨ ${ff(amt)}</td><td style="color:#64748b;">${totalExp?((amt/totalExp)*100).toFixed(1):0}%</td><td><div class="bar-wrap"><div class="bar" style="width:${totalExp?Math.round((amt/totalExp)*100):0}%"></div></div></td></tr>`).join('')}
+    <tr style="background:#f1f5f9;font-weight:700;"><td colspan="2">TOTAL</td><td class="amount red">₨ ${ff(totalExp)}</td><td>100%</td><td></td></tr>
+  </tbody></table>
+</div>
+<div class="section">
+  <div class="two-col">
+    <div class="box">
+      <div class="section-title">🏢 Office vs Personal</div>
+      <div class="row"><span>Office Expense</span><span class="amount red">₨ ${ff(stats.offExp||0)}</span></div>
+      <div class="row"><span>Personal Expense</span><span class="amount red">₨ ${ff(stats.perExp||0)}</span></div>
+      <div class="row" style="font-weight:700;border:none;"><span>Total</span><span class="amount">₨ ${ff(stats.expense)}</span></div>
+    </div>
+    <div class="box">
+      <div class="section-title">🏧 Account Balances</div>
+      ${ACCOUNTS.map(a=>`<div class="row"><span>${a.name}</span><span class="amount ${a.balance>=0?'green':'red'}">₨ ${ff(a.balance)}</span></div>`).join('')}
+      <div class="row" style="font-weight:700;border:none;"><span>TOTAL</span><span class="amount green">₨ ${ff(totalAccountBal)}</span></div>
+    </div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-title">🤝 Loan Summary</div>
+  <table><thead><tr><th>Person</th><th>Given</th><th>Received Back</th><th>Taken</th><th>Repaid</th><th>Net</th></tr></thead>
+  <tbody>${LOANS.map(l=>`<tr><td style="font-weight:700;">${l.person}</td><td class="amount">${ff(l.given)}</td><td class="amount green">${ff(l.receivedBack)}</td><td class="amount">${ff(l.taken)}</td><td class="amount green">${ff(l.repaid)}</td><td class="amount ${l.net>0?'green':l.net<0?'red':''}"><strong>${l.net>=0?'+':''}${ff(l.net)}</strong></td></tr>`).join('')}</tbody>
+  </table>
+</div>
+<div class="section">
+  <div class="section-title">💎 Savings Summary</div>
+  <table><thead><tr><th>Location</th><th>Opening</th><th>Deposits</th><th>Withdraws</th><th>Total Balance</th></tr></thead>
+  <tbody>
+    ${SAVINGS_SUMMARY.map(s=>`<tr><td style="font-weight:600;">${s.location}</td><td class="amount">${ff(s.openingBalance)}</td><td class="amount green">${ff(s.deposits)}</td><td class="amount red">${ff(s.withdraws)}</td><td class="amount purple" style="font-weight:700;">₨ ${ff(s.totalBalance)}</td></tr>`).join('')}
+    <tr style="background:#f1f5f9;font-weight:700;"><td colspan="4">GRAND TOTAL</td><td class="amount purple">₨ ${ff(totalSavings)}</td></tr>
+  </tbody></table>
+</div>
+<div class="section">
+  <div class="section-title">📋 Transactions (${filtered.length})</div>
+  <table><thead><tr><th>Date</th><th>Type</th><th>Category</th><th>Group</th><th>Description</th><th>Amount</th><th>From</th><th>To</th><th>Party</th></tr></thead>
+  <tbody>${[...filtered].sort((a,b)=>b.d.localeCompare(a.d)).map(tx=>`<tr>
+    <td style="font-family:monospace;color:#64748b;">${tx.d}</td>
+    <td><span class="badge" style="background:${tB(tx.t)};color:${tC(tx.t)};">${tx.t}</span></td>
+    <td style="font-weight:500;">${tx.c}</td>
+    <td style="color:#64748b;">${tx.g}</td>
+    <td style="color:#94a3b8;">${tx.desc||'—'}</td>
+    <td class="amount" style="color:${tC(tx.t)};font-weight:700;">₨ ${ff(tx.a)}</td>
+    <td style="color:#64748b;">${tx.fa||'—'}</td>
+    <td style="color:#64748b;">${tx.ta||'—'}</td>
+    <td style="color:#6366f1;">${tx.p||'—'}</td>
+  </tr>`).join('')}</tbody></table>
+</div>
+<div class="footer">Waleed's Expense Tracker &nbsp;•&nbsp; ${new Date().toLocaleString('en-PK')} &nbsp;•&nbsp; ${filtered.length} transactions &nbsp;•&nbsp; ${dateLabel}</div>
+</body></html>`;
+
+    // Open in new tab using blob URL — works without popup blocker
+    const blob = new Blob([html], {type: 'text/html'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  };
 
     // Category wise filtered expenses
     const catExp = {};
@@ -542,12 +665,6 @@ export default function Dashboard({ user, onLogout }) {
 </div>
 </body>
 </html>`;
-
-    const win = window.open('', '_blank');
-    win.document.write(html);
-    win.document.close();
-    setTimeout(() => win.print(), 500);
-  };
 
   const EXPENSE_CATS=useMemo(()=>{const m={};norm.filter(tx=>tx.t==="Expense").forEach(tx=>{m[tx.c]=(m[tx.c]||0)+tx.a;});return Object.entries(m).sort((a,b)=>b[1]-a[1]).map(([c,a])=>({c,a}));},[norm]);
 
