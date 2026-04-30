@@ -619,15 +619,26 @@ export default function Dashboard({ user, onLogout }) {
   const EXPENSE_CATS=useMemo(()=>{const m={};norm.filter(tx=>tx.t==="Expense").forEach(tx=>{m[tx.c]=(m[tx.c]||0)+tx.a;});return Object.entries(m).sort((a,b)=>b[1]-a[1]).map(([c,a])=>({c,a}));},[norm]);
 
   const MR=useMemo(()=>{
-    const cm=new Date().getMonth();
-    const txs=norm.filter(tx=>new Date(tx.d).getMonth()===cm);
-    let r={totalIncome:0,totalExpense:0,loanGiven:0,loanTaken:0,loanRepaid:0,loanReceivedBack:0,transfer:0,savingsDeposit:0,savingsWithdraw:0};
-    txs.forEach(tx=>{if(tx.t==="Income")r.totalIncome+=tx.a;else if(tx.t==="Expense")r.totalExpense+=tx.a;else if(tx.t==="Loan Given")r.loanGiven+=tx.a;else if(tx.t==="Loan Taken")r.loanTaken+=tx.a;else if(tx.t==="Loan Repaid")r.loanRepaid+=tx.a;else if(tx.t==="Loan Received Back")r.loanReceivedBack+=tx.a;else if(tx.t==="Transfer")r.transfer+=tx.a;else if(tx.t==="Savings Deposit")r.savingsDeposit+=tx.a;else if(tx.t==="Savings Withdraw")r.savingsWithdraw+=tx.a;});
-    r.netBalance=r.totalIncome-r.totalExpense; r.adjustedNet=r.netBalance+r.loanTaken-r.loanRepaid-r.loanGiven+r.loanReceivedBack;
+    // Use filtered transactions (respects date filter)
+    const txs=filtered;
+    let r={totalIncome:0,totalExpense:0,loanGiven:0,loanTaken:0,loanRepaid:0,loanReceivedBack:0,transfer:0,savingsDeposit:0,savingsWithdraw:0,offExp:0,perExp:0};
+    txs.forEach(tx=>{
+      if(tx.t==="Income")r.totalIncome+=tx.a;
+      else if(tx.t==="Expense"){r.totalExpense+=tx.a;if(tx.g==="Office")r.offExp+=tx.a;else r.perExp+=tx.a;}
+      else if(tx.t==="Loan Given")r.loanGiven+=tx.a;
+      else if(tx.t==="Loan Taken")r.loanTaken+=tx.a;
+      else if(tx.t==="Loan Repaid")r.loanRepaid+=tx.a;
+      else if(tx.t==="Loan Received Back")r.loanReceivedBack+=tx.a;
+      else if(tx.t==="Transfer")r.transfer+=tx.a;
+      else if(tx.t==="Savings Deposit")r.savingsDeposit+=tx.a;
+      else if(tx.t==="Savings Withdraw")r.savingsWithdraw+=tx.a;
+    });
+    r.netBalance=r.totalIncome-r.totalExpense;
+    r.adjustedNet=r.netBalance+r.loanTaken-r.loanRepaid-r.loanGiven+r.loanReceivedBack;
     r.savings=SAVINGS_SUMMARY.map(s=>({loc:s.location,opening:s.openingBalance,activity:s.deposits-s.withdraws}));
     r.accounts=ACCOUNTS.map(a=>({name:a.name,bal:a.balance}));
     return r;
-  },[norm,SAVINGS_SUMMARY,ACCOUNTS]);
+  },[filtered,SAVINGS_SUMMARY,ACCOUNTS]);
 
   const mV=(v)=>hidden?"••••••":v;
   const isMobile = window.innerWidth < 600;
@@ -854,7 +865,7 @@ export default function Dashboard({ user, onLogout }) {
 
     {tab==="loans"&&<div style={cd}><ST icon="🤝">Loan Summary</ST><TW><thead><tr>{["Person","Given","Received Back","Taken","Repaid","Net Position","Open Given","Open Taken"].map(h=><th key={h} style={thS}>{h}</th>)}</tr></thead><tbody>{LOANS.map((l,i)=><tr key={i}><td style={{...td,fontWeight:700}}>{l.person}</td><td style={{...td,...mn,color:l.given?"#f59e0b":"#475569"}}>{ff(l.given)}</td><td style={{...td,...mn,color:l.receivedBack?"#10b981":"#475569"}}>{ff(l.receivedBack)}</td><td style={{...td,...mn,color:l.taken?"#ec4899":"#475569"}}>{ff(l.taken)}</td><td style={{...td,...mn,color:l.repaid?"#14b8a6":"#475569"}}>{ff(l.repaid)}</td><td style={{...td,...mn,fontWeight:700,color:l.net>0?"#10b981":l.net<0?"#f87171":"#64748b"}}>{l.net>=0?"+":""}{ff(l.net)}</td><td style={{...td,...mn,fontSize:11,color:"#94a3b8"}}>{ff(l.openGiven)}</td><td style={{...td,...mn,fontSize:11,color:"#94a3b8"}}>{ff(l.openTaken)}</td></tr>)}</tbody></TW><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginTop:16}}><div style={{padding:14,background:"rgba(16,185,129,.08)",borderRadius:12,border:"1px solid rgba(16,185,129,.15)"}}><div style={{fontSize:12,color:"#10b981",fontWeight:600,marginBottom:4}}>Others Owe Me</div><div style={{...mn,fontSize:20,fontWeight:800,color:"#10b981"}}>₨ {ff(LOANS.filter(l=>l.net>0).reduce((s,l)=>s+l.net,0))}</div></div><div style={{padding:14,background:"rgba(239,68,68,.08)",borderRadius:12,border:"1px solid rgba(239,68,68,.15)"}}><div style={{fontSize:12,color:"#f87171",fontWeight:600,marginBottom:4}}>I Owe Others</div><div style={{...mn,fontSize:20,fontWeight:800,color:"#f87171"}}>₨ {ff(Math.abs(LOANS.filter(l=>l.net<0).reduce((s,l)=>s+l.net,0)))}</div></div></div></div>}
 
-    {tab==="report"&&<><div style={{...cd,marginBottom:20}}><ST icon="📊">Monthly Report — {new Date().toLocaleString('default',{month:'long',year:'numeric'})}</ST><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:10,marginBottom:20}}>{[["Total Income",MR.totalIncome,"#10b981"],["Total Expense",MR.totalExpense,"#ef4444"],["Net Balance",MR.netBalance,"#6366f1"],["Loan Given",MR.loanGiven,"#f59e0b"],["Loan Taken",MR.loanTaken,"#ec4899"],["Loan Repaid",MR.loanRepaid,"#14b8a6"],["Loan Received Back",MR.loanReceivedBack,"#8b5cf6"],["Transfer",MR.transfer,"#06b6d4"],["Savings Deposit",MR.savingsDeposit,"#84cc16"],["Savings Withdraw",MR.savingsWithdraw,"#64748b"],["Adjusted Net",MR.adjustedNet,"#f97316"]].map(([l,v,c],i)=><div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 14px",background:"rgba(255,255,255,.02)",borderRadius:10,border:"1px solid rgba(255,255,255,.04)"}}><span style={{fontSize:11,color:"#94a3b8",fontWeight:500}}>{l}</span><span style={{...mn,fontSize:14,fontWeight:700,color:c}}>{ff(v)}</span></div>)}</div></div>
+    {tab==="report"&&<><div style={{...cd,marginBottom:20}}><ST icon="📊">Report — {fromDate||'All'} {toDate?`to ${toDate}`:''} ({filtered.length} transactions)</ST><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:10,marginBottom:20}}>{[["Total Income",MR.totalIncome,"#10b981"],["Total Expense",MR.totalExpense,"#ef4444"],["Office Expense",MR.offExp,"#a5b4fc"],["Personal Expense",MR.perExp,"#fbbf24"],["Net Balance",MR.netBalance,"#6366f1"],["Loan Given",MR.loanGiven,"#f59e0b"],["Loan Taken",MR.loanTaken,"#ec4899"],["Loan Repaid",MR.loanRepaid,"#14b8a6"],["Loan Received Back",MR.loanReceivedBack,"#8b5cf6"],["Transfer",MR.transfer,"#06b6d4"],["Savings Deposit",MR.savingsDeposit,"#84cc16"],["Savings Withdraw",MR.savingsWithdraw,"#64748b"],["Adjusted Net",MR.adjustedNet,"#f97316"]].map(([l,v,c],i)=><div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 14px",background:"rgba(255,255,255,.02)",borderRadius:10,border:"1px solid rgba(255,255,255,.04)"}}><span style={{fontSize:11,color:"#94a3b8",fontWeight:500}}>{l}</span><span style={{...mn,fontSize:14,fontWeight:700,color:c}}>{ff(v)}</span></div>)}</div></div>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:16}}>
       <div style={cd}><ST icon="💎">Savings</ST>{MR.savings.map((s,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid rgba(255,255,255,.03)"}}><div><div style={{fontSize:12,fontWeight:500}}>{s.loc}</div><div style={{fontSize:10,color:"#64748b"}}>Opening: {ff(s.opening)}</div></div><span style={{...mn,fontSize:12,fontWeight:600,color:s.activity?"#10b981":"#475569"}}>{ff(s.activity)}</span></div>)}</div>
       <div style={cd}><ST icon="🏧">Account Balances</ST>{MR.accounts.map((a,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:"1px solid rgba(255,255,255,.03)"}}><span style={{fontSize:12}}>{a.name}</span><span style={{...mn,fontSize:12,fontWeight:600,color:a.bal>0?"#10b981":"#64748b"}}>{ff(a.bal)}</span></div>)}<div style={{display:"flex",justifyContent:"space-between",padding:"10px 0",borderTop:"2px solid rgba(255,255,255,.08)",marginTop:4}}><span style={{fontWeight:700}}>TOTAL</span><span style={{...mn,fontWeight:800,color:"#10b981"}}>{ff(MR.accounts.reduce((s,a)=>s+a.bal,0))}</span></div></div>
