@@ -797,29 +797,14 @@ export default function Dashboard({ user, onLogout }) {
     <div style={{display:"flex",gap:6,marginBottom:22,flexWrap:"wrap"}}>{TABS.map(t=><button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"8px 14px",cursor:"pointer",borderRadius:10,fontSize:11,fontWeight:600,whiteSpace:"nowrap",background:tab===t.id?"linear-gradient(135deg,#6366f1,#8b5cf6)":"rgba(255,255,255,.04)",color:tab===t.id?"#fff":"#94a3b8",border:tab===t.id?"none":"1px solid rgba(255,255,255,.06)",transition:"all .3s"}}>{t.i} {t.l}</button>)}</div>
 
     {tab==="dashboard"&&<>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:12,marginBottom:12}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:12,marginBottom:20}}>
         <KPI label="Total Income" value={"₨ "+fmt(stats.income)} color="#10b981" icon="💰"/>
         <KPI label="Total Expense" value={"₨ "+fmt(stats.expense)} color="#ef4444" icon="💸"/>
-        <KPI label="Inc - Exp" value={"₨ "+fmt(stats.net)} sub="Income minus Expense" color={stats.net>=0?"#10b981":"#ef4444"} icon="📊"/>
-        <KPI label="Loan Impact" value={"₨ "+fmt(stats.loanImpact)} sub={stats.loanImpact>=0?"Net Cash In":"Net Cash Out"} color={stats.loanImpact>=0?"#06b6d4":"#f97316"} icon="⚡"/>
-        <KPI label="True Cash Flow ✓" value={"₨ "+fmt(stats.actualNet)} sub="Inc-Exp + All Loans" color={stats.actualNet>=0?"#a78bfa":"#f87171"} icon="🎯"/>
-      </div>
-      <div style={{...cd,marginBottom:16,padding:14,borderColor:"rgba(99,102,241,.2)"}}>
-        <div style={{fontSize:11,color:"#64748b",marginBottom:6}}>💡 Formula: True Cash Flow = Income − Expense + Loan Taken − Loan Repaid − Loan Given + Loan Received Back</div>
-        <div style={{display:"flex",gap:16,flexWrap:"wrap",fontSize:12,...mn}}>
-          <span style={{color:"#10b981"}}>Inc: {fmt(stats.income)}</span>
-          <span style={{color:"#f87171"}}>Exp: -{fmt(stats.expense)}</span>
-          <span style={{color:"#ec4899"}}>LoanTaken: +{fmt(stats.loanTaken||0)}</span>
-          <span style={{color:"#14b8a6"}}>LoanRepaid: -{fmt(stats.loanRepaid||0)}</span>
-          <span style={{color:"#f59e0b"}}>LoanGiven: -{fmt(stats.loanGiven||0)}</span>
-          <span style={{color:"#8b5cf6"}}>LoanBack: +{fmt(stats.loanBack||0)}</span>
-          <span style={{color:"#a78bfa",fontWeight:700}}>= {fmt(stats.actualNet)}</span>
-        </div>
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:12,marginBottom:20}}>
+        <KPI label="Net" value={"₨ "+fmt(stats.net)} color={stats.net>=0?"#10b981":"#ef4444"} icon="📊"/>
+        <KPI label="Loan Impact" value={"₨ "+fmt(stats.loanImpact)} color={stats.loanImpact>=0?"#06b6d4":"#f97316"} icon="⚡"/>
+        <KPI label="Final Net" value={"₨ "+fmt(stats.actualNet)} color={stats.actualNet>=0?"#a78bfa":"#f87171"} icon="🎯"/>
         <KPI label="Account Balance" value={"₨ "+fmt(ACCOUNTS.reduce((s,a)=>s+a.balance,0))} color="#06b6d4" icon="🏧"/>
-        <KPI label="Savings Balance" value={"₨ "+fmt(SAVINGS_SUMMARY.reduce((s,x)=>s+x.totalBalance,0))} sub={"Opening: ₨"+fmt(settings.savings_opening.reduce((s,x)=>s+x.amount,0))} color="#8b5cf6" icon="💎"/>
-        <KPI label="Total Savings (Period)" value={"₨ "+fmt(stats.savings)} color="#a78bfa" icon="💰"/>
+        <KPI label="Savings Balance" value={"₨ "+fmt(SAVINGS_SUMMARY.reduce((s,x)=>s+x.totalBalance,0))} color="#8b5cf6" icon="💎"/>
         <KPI label="Others Owe Me" value={"₨ "+fmt(LOANS.filter(l=>l.net>0).reduce((s,l)=>s+l.net,0))} color="#f59e0b" icon="📤"/>
         <KPI label="I Owe Others" value={"₨ "+fmt(Math.abs(LOANS.filter(l=>l.net<0).reduce((s,l)=>s+l.net,0)))} color="#ec4899" icon="📥"/>
         <KPI label="Net Loan Pos" value={"₨ "+fmt(LOANS.reduce((s,l)=>s+l.net,0))} color="#f97316" icon="🔄"/>
