@@ -495,6 +495,10 @@ export default function Dashboard({ user, onLogout }) {
     filtered.filter(tx=>tx.t==="Expense").forEach(tx=>{catExp[tx.c]=(catExp[tx.c]||0)+tx.a;});
     const catList = Object.entries(catExp).sort((a,b)=>b[1]-a[1]);
     const totalExp = catList.reduce((s,[,v])=>s+v,0);
+    const incExp = {};
+    filtered.filter(tx=>tx.t==="Income").forEach(tx=>{incExp[tx.c]=(incExp[tx.c]||0)+tx.a;});
+    const incList = Object.entries(incExp).sort((a,b)=>b[1]-a[1]);
+    const totalInc = incList.reduce((s,[,v])=>s+v,0);
 
     const html = `<!DOCTYPE html>
 <html>
@@ -559,6 +563,14 @@ export default function Dashboard({ user, onLogout }) {
   </tbody></table>
 </div>
 <div class="section">
+  <div class="section-title">💰 Income by Category</div>
+  <table><thead><tr><th>#</th><th>Category</th><th>Amount</th><th>% of Total</th><th style="width:180px;">Bar</th></tr></thead>
+  <tbody>
+    ${incList.length?incList.map(([cat,amt],i)=>`<tr><td style="color:#94a3b8;">${i+1}</td><td style="font-weight:600;">${cat}</td><td class="amount green">₨ ${ff(amt)}</td><td style="color:#64748b;">${totalInc?((amt/totalInc)*100).toFixed(1):0}%</td><td><div class="bar-wrap"><div class="bar" style="width:${totalInc?Math.round((amt/totalInc)*100):0}%;background:linear-gradient(90deg,#10b981,#059669)"></div></div></td></tr>`).join(''):'<tr><td colspan="5" style="color:#94a3b8;text-align:center;padding:16px;">No income in this period</td></tr>'}
+    ${incList.length?`<tr style="background:#f1f5f9;font-weight:700;"><td colspan="2">TOTAL</td><td class="amount green">₨ ${ff(totalInc)}</td><td>100%</td><td></td></tr>`:''}
+  </tbody></table>
+</div>
+<div class="section">
   <div class="two-col">
     <div class="box">
       <div class="section-title">🏢 Office vs Personal</div>
@@ -617,6 +629,7 @@ export default function Dashboard({ user, onLogout }) {
 
 
   const EXPENSE_CATS=useMemo(()=>{const m={};filtered.filter(tx=>tx.t==="Expense").forEach(tx=>{m[tx.c]=(m[tx.c]||0)+tx.a;});return Object.entries(m).sort((a,b)=>b[1]-a[1]).map(([c,a])=>({c,a}));},[filtered]);
+  const INCOME_CATS=useMemo(()=>{const m={};filtered.filter(tx=>tx.t==="Income").forEach(tx=>{m[tx.c]=(m[tx.c]||0)+tx.a;});return Object.entries(m).sort((a,b)=>b[1]-a[1]).map(([c,a])=>({c,a}));},[filtered]);
 
   const MR=useMemo(()=>{
     // Use filtered transactions (respects date filter)
@@ -791,7 +804,8 @@ export default function Dashboard({ user, onLogout }) {
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:16}}>
         <div style={cd}><ST icon="🏦">Account Balances</ST>{ACCOUNTS.map((a,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:"1px solid rgba(255,255,255,.03)"}}><span style={{fontSize:12,fontWeight:500}}>{a.name}</span><span style={{...mn,fontSize:12,fontWeight:600,color:a.balance>0?"#10b981":"#64748b"}}>{ff(a.balance)}</span></div>)}<div style={{display:"flex",justifyContent:"space-between",padding:"10px 0",borderTop:"2px solid rgba(255,255,255,.08)",marginTop:4}}><span style={{fontWeight:700}}>TOTAL</span><span style={{...mn,fontWeight:800,color:"#10b981"}}>{ff(ACCOUNTS.reduce((s,a)=>s+a.balance,0))}</span></div></div>
         <div style={cd}><ST icon="🤝">Loan Positions</ST>{LOANS.map((l,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid rgba(255,255,255,.03)"}}><span style={{fontSize:12}}>{l.person}</span><span style={{...mn,fontSize:12,fontWeight:600,color:l.net>0?"#10b981":l.net<0?"#f87171":"#64748b"}}>{l.net>=0?"+":""}{ff(l.net)}</span></div>)}</div>
-        <div style={cd}><ST icon="📊">Expense by Category</ST>{EXPENSE_CATS.map((c,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid rgba(255,255,255,.03)"}}><span style={{fontSize:12}}>{c.c}</span><span style={{...mn,fontSize:12,fontWeight:600}}>{ff(c.a)}</span></div>)}</div>
+        <div style={cd}><ST icon="📊">Expense by Category</ST>{EXPENSE_CATS.map((c,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid rgba(255,255,255,.03)"}}><span style={{fontSize:12}}>{c.c}</span><span style={{...mn,fontSize:12,fontWeight:600,color:"#f87171"}}>{ff(c.a)}</span></div>)}</div>
+        <div style={cd}><ST icon="💰">Income by Category</ST>{INCOME_CATS.length?INCOME_CATS.map((c,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid rgba(255,255,255,.03)"}}><span style={{fontSize:12}}>{c.c}</span><span style={{...mn,fontSize:12,fontWeight:600,color:"#10b981"}}>{ff(c.a)}</span></div>):<div style={{color:"#475569",fontSize:12}}>No income in this period</div>}</div>
       </div>
     </>}
 
@@ -875,9 +889,12 @@ export default function Dashboard({ user, onLogout }) {
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:16}}>
       <div style={cd}><ST icon="💎">Savings</ST>{MR.savings.map((s,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid rgba(255,255,255,.03)"}}><div><div style={{fontSize:12,fontWeight:500}}>{s.loc}</div><div style={{fontSize:10,color:"#64748b"}}>Total: ₨{ff(s.totalBalance)}</div></div><div style={{textAlign:"right"}}>{s.periodDeps>0&&<div style={{fontSize:11,color:"#10b981"}}>+{ff(s.periodDeps)}</div>}{s.periodWiths>0&&<div style={{fontSize:11,color:"#f87171"}}>-{ff(s.periodWiths)}</div>}{s.periodDeps===0&&s.periodWiths===0&&<div style={{fontSize:11,color:"#475569"}}>—</div>}</div></div>)}<div style={{marginTop:10,padding:"8px 0",borderTop:"1px solid rgba(255,255,255,.08)",display:"flex",justifyContent:"space-between"}}><span style={{fontWeight:700,fontSize:12}}>Total Savings</span><span style={{...mn,fontWeight:800,color:"#a78bfa"}}>₨{ff(SAVINGS_SUMMARY.reduce((s,x)=>s+x.totalBalance,0))}</span></div></div>
       <div style={cd}><ST icon="🏧">Account Balances</ST>{MR.accounts.map((a,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:"1px solid rgba(255,255,255,.03)"}}><span style={{fontSize:12}}>{a.name}</span><span style={{...mn,fontSize:12,fontWeight:600,color:a.bal>0?"#10b981":a.bal<0?"#f87171":"#64748b"}}>{ff(a.bal)}</span></div>)}<div style={{display:"flex",justifyContent:"space-between",padding:"10px 0",borderTop:"2px solid rgba(255,255,255,.08)",marginTop:4}}><span style={{fontWeight:700}}>TOTAL</span><span style={{...mn,fontWeight:800,color:"#10b981"}}>{ff(MR.accounts.reduce((s,a)=>s+a.bal,0))}</span></div></div>
-      <div style={cd}><ST icon="📊">Expense by Category</ST>{EXPENSE_CATS.map((c,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid rgba(255,255,255,.03)"}}><span style={{fontSize:12}}>{c.c}</span><span style={{...mn,fontSize:12,fontWeight:600}}>{ff(c.a)}</span></div>)}</div>
+      <div style={cd}><ST icon="📊">Expense by Category</ST>{EXPENSE_CATS.map((c,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid rgba(255,255,255,.03)"}}><span style={{fontSize:12}}>{c.c}</span><span style={{...mn,fontSize:12,fontWeight:600,color:"#f87171"}}>{ff(c.a)}</span></div>)}</div>
     </div>
-    <div style={{...cd,marginTop:20}}><ST icon="📈">Expense by Category Chart</ST><ResponsiveContainer width="100%" height={380}><BarChart data={EXPENSE_CATS} layout="vertical"><CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,.05)"/><XAxis type="number" tick={{fill:"#64748b",fontSize:10}} tickFormatter={fmt}/><YAxis type="category" dataKey="c" tick={{fill:"#94a3b8",fontSize:11}} width={110}/><Tooltip contentStyle={ts} formatter={v=>"₨ "+ff(v)}/><Bar dataKey="a" radius={[0,6,6,0]} name="Amount">{EXPENSE_CATS.map((e,i)=><Cell key={i} fill={CL[i%CL.length]}/>)}</Bar></BarChart></ResponsiveContainer></div></>}
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginTop:16}}>
+      <div style={cd}><ST icon="📈">Expense by Category Chart</ST><ResponsiveContainer width="100%" height={300}><BarChart data={EXPENSE_CATS} layout="vertical"><CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,.05)"/><XAxis type="number" tick={{fill:"#64748b",fontSize:10}} tickFormatter={fmt}/><YAxis type="category" dataKey="c" tick={{fill:"#94a3b8",fontSize:11}} width={110}/><Tooltip contentStyle={ts} formatter={v=>"₨ "+ff(v)}/><Bar dataKey="a" radius={[0,6,6,0]} name="Expense">{EXPENSE_CATS.map((e,i)=><Cell key={i} fill={CL[i%CL.length]}/>)}</Bar></BarChart></ResponsiveContainer></div>
+      <div style={cd}><ST icon="💰">Income by Category</ST>{INCOME_CATS.length?<><div style={{marginBottom:12}}>{INCOME_CATS.map((c,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:"1px solid rgba(255,255,255,.03)"}}><span style={{fontSize:12,fontWeight:500}}>{c.c}</span><span style={{...mn,fontSize:12,fontWeight:600,color:"#10b981"}}>{ff(c.a)}</span></div>)}</div><ResponsiveContainer width="100%" height={200}><BarChart data={INCOME_CATS} layout="vertical"><CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,.05)"/><XAxis type="number" tick={{fill:"#64748b",fontSize:10}} tickFormatter={fmt}/><YAxis type="category" dataKey="c" tick={{fill:"#94a3b8",fontSize:11}} width={110}/><Tooltip contentStyle={ts} formatter={v=>"₨ "+ff(v)}/><Bar dataKey="a" radius={[0,6,6,0]} name="Income" fill="#10b981"/></BarChart></ResponsiveContainer></>:<div style={{color:"#475569",fontSize:12,padding:20,textAlign:"center"}}>No income in this period</div>}</div>
+    </div></>}
 
     {tab==="settings"&&<SettingsTab settings={settings} setSettings={setSettings} user={user} setError={setError}/>}
 
