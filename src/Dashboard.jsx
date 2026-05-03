@@ -409,7 +409,9 @@ export default function Dashboard({ user, onLogout }) {
       else if(tx.t==="Savings Deposit")r.savings+=tx.a;
       else if(tx.t==="Transfer")r.transfer+=tx.a;
     });
-    r.net=r.income-r.expense; r.loanImpact=r.loanTaken-r.loanRepaid-r.loanGiven+r.loanBack;
+    r.net=r.income-r.expense; 
+    r.loanImpact=r.loanTaken-r.loanRepaid-r.loanGiven+r.loanBack;
+    r.actualNet=r.net+r.loanImpact; // True cash flow including loans
     return r;
   }, [filtered]);
 
@@ -647,7 +649,8 @@ export default function Dashboard({ user, onLogout }) {
       else if(tx.t==="Savings Withdraw")r.savingsWithdraw+=tx.a;
     });
     r.netBalance=r.totalIncome-r.totalExpense;
-    r.adjustedNet=r.netBalance+r.loanTaken-r.loanRepaid-r.loanGiven+r.loanReceivedBack;
+    r.loanImpact=r.loanTaken-r.loanRepaid-r.loanGiven+r.loanReceivedBack;
+    r.actualNet=r.netBalance+r.loanImpact;
     // Savings activity in this period only
     r.savings=SAVINGS_SUMMARY.map(s=>{
       const periodDeps=filtered.filter(tx=>(tx.t==="Savings Deposit")&&(tx.c===s.location||(s.location==="Cash Backup"&&tx.c==="Savings"))).reduce((sum,tx)=>sum+tx.a,0);
@@ -794,8 +797,33 @@ export default function Dashboard({ user, onLogout }) {
     <div style={{display:"flex",gap:6,marginBottom:22,flexWrap:"wrap"}}>{TABS.map(t=><button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"8px 14px",cursor:"pointer",borderRadius:10,fontSize:11,fontWeight:600,whiteSpace:"nowrap",background:tab===t.id?"linear-gradient(135deg,#6366f1,#8b5cf6)":"rgba(255,255,255,.04)",color:tab===t.id?"#fff":"#94a3b8",border:tab===t.id?"none":"1px solid rgba(255,255,255,.06)",transition:"all .3s"}}>{t.i} {t.l}</button>)}</div>
 
     {tab==="dashboard"&&<>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:12,marginBottom:20}}><KPI label="Total Income" value={"₨ "+fmt(stats.income)} color="#10b981" icon="💰"/><KPI label="Total Expense" value={"₨ "+fmt(stats.expense)} color="#ef4444" icon="💸"/><KPI label="Net Balance" value={"₨ "+fmt(stats.net)} sub={stats.net>=0?"Surplus":"Deficit"} color={stats.net>=0?"#10b981":"#ef4444"} icon="📊"/><KPI label="Total Savings" value={"₨ "+fmt(stats.savings)} color="#8b5cf6" icon="💎"/><KPI label="Account Balance" value={"₨ "+fmt(ACCOUNTS.reduce((s,a)=>s+a.balance,0))} color="#06b6d4" icon="🏧"/></div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:12,marginBottom:24}}><KPI label="Others Owe Me" value={"₨ "+fmt(LOANS.filter(l=>l.net>0).reduce((s,l)=>s+l.net,0))} color="#f59e0b" icon="📤"/><KPI label="I Owe Others" value={"₨ "+fmt(Math.abs(LOANS.filter(l=>l.net<0).reduce((s,l)=>s+l.net,0)))} color="#ec4899" icon="📥"/><KPI label="Net Loan" value={"₨ "+fmt(LOANS.reduce((s,l)=>s+l.net,0))} color="#f97316" icon="🔄"/><KPI label="Loan Impact" value={"₨ "+fmt(stats.loanImpact)} color="#14b8a6" icon="⚡"/></div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:12,marginBottom:12}}>
+        <KPI label="Total Income" value={"₨ "+fmt(stats.income)} color="#10b981" icon="💰"/>
+        <KPI label="Total Expense" value={"₨ "+fmt(stats.expense)} color="#ef4444" icon="💸"/>
+        <KPI label="Inc - Exp" value={"₨ "+fmt(stats.net)} sub="Income minus Expense" color={stats.net>=0?"#10b981":"#ef4444"} icon="📊"/>
+        <KPI label="Loan Impact" value={"₨ "+fmt(stats.loanImpact)} sub={stats.loanImpact>=0?"Net Cash In":"Net Cash Out"} color={stats.loanImpact>=0?"#06b6d4":"#f97316"} icon="⚡"/>
+        <KPI label="True Cash Flow ✓" value={"₨ "+fmt(stats.actualNet)} sub="Inc-Exp + All Loans" color={stats.actualNet>=0?"#a78bfa":"#f87171"} icon="🎯"/>
+      </div>
+      <div style={{...cd,marginBottom:16,padding:14,borderColor:"rgba(99,102,241,.2)"}}>
+        <div style={{fontSize:11,color:"#64748b",marginBottom:6}}>💡 Formula: True Cash Flow = Income − Expense + Loan Taken − Loan Repaid − Loan Given + Loan Received Back</div>
+        <div style={{display:"flex",gap:16,flexWrap:"wrap",fontSize:12,...mn}}>
+          <span style={{color:"#10b981"}}>Inc: {fmt(stats.income)}</span>
+          <span style={{color:"#f87171"}}>Exp: -{fmt(stats.expense)}</span>
+          <span style={{color:"#ec4899"}}>LoanTaken: +{fmt(stats.loanTaken||0)}</span>
+          <span style={{color:"#14b8a6"}}>LoanRepaid: -{fmt(stats.loanRepaid||0)}</span>
+          <span style={{color:"#f59e0b"}}>LoanGiven: -{fmt(stats.loanGiven||0)}</span>
+          <span style={{color:"#8b5cf6"}}>LoanBack: +{fmt(stats.loanBack||0)}</span>
+          <span style={{color:"#a78bfa",fontWeight:700}}>= {fmt(stats.actualNet)}</span>
+        </div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:12,marginBottom:20}}>
+        <KPI label="Account Balance" value={"₨ "+fmt(ACCOUNTS.reduce((s,a)=>s+a.balance,0))} color="#06b6d4" icon="🏧"/>
+        <KPI label="Savings Balance" value={"₨ "+fmt(SAVINGS_SUMMARY.reduce((s,x)=>s+x.totalBalance,0))} sub={"Opening: ₨"+fmt(settings.savings_opening.reduce((s,x)=>s+x.amount,0))} color="#8b5cf6" icon="💎"/>
+        <KPI label="Total Savings (Period)" value={"₨ "+fmt(stats.savings)} color="#a78bfa" icon="💰"/>
+        <KPI label="Others Owe Me" value={"₨ "+fmt(LOANS.filter(l=>l.net>0).reduce((s,l)=>s+l.net,0))} color="#f59e0b" icon="📤"/>
+        <KPI label="I Owe Others" value={"₨ "+fmt(Math.abs(LOANS.filter(l=>l.net<0).reduce((s,l)=>s+l.net,0)))} color="#ec4899" icon="📥"/>
+        <KPI label="Net Loan Pos" value={"₨ "+fmt(LOANS.reduce((s,l)=>s+l.net,0))} color="#f97316" icon="🔄"/>
+      </div>
       <div style={{...cd,marginBottom:20}}><ST icon="📈">Daily Income vs Expense</ST><ResponsiveContainer width="100%" height={260}><AreaChart data={dailyData}><defs><linearGradient id="gi" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={.3}/><stop offset="95%" stopColor="#10b981" stopOpacity={0}/></linearGradient><linearGradient id="ge" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#ef4444" stopOpacity={.3}/><stop offset="95%" stopColor="#ef4444" stopOpacity={0}/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,.05)"/><XAxis dataKey="date" tick={{fill:"#64748b",fontSize:9}} tickFormatter={v=>v.slice(5)}/><YAxis tick={{fill:"#64748b",fontSize:9}} tickFormatter={fmt}/><Tooltip contentStyle={ts} formatter={v=>"₨ "+ff(v)}/><Area type="monotone" dataKey="income" stroke="#10b981" fill="url(#gi)" strokeWidth={2} name="Income"/><Area type="monotone" dataKey="expense" stroke="#ef4444" fill="url(#ge)" strokeWidth={2} name="Expense"/><Legend/></AreaChart></ResponsiveContainer></div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:20}}>
         <div style={cd}><ST icon="📊">Expense by Category</ST><ResponsiveContainer width="100%" height={220}><PieChart><Pie data={catData} cx="50%" cy="50%" outerRadius={80} innerRadius={45} dataKey="value" paddingAngle={2}>{catData.map((e,i)=><Cell key={i} fill={e.color}/>)}</Pie><Tooltip contentStyle={ts} formatter={v=>"₨ "+ff(v)}/></PieChart></ResponsiveContainer><div style={{display:"flex",flexWrap:"wrap",gap:5,marginTop:6}}>{catData.slice(0,10).map((c,i)=><span key={i} style={{fontSize:9,color:"#94a3b8",display:"flex",alignItems:"center",gap:3}}><span style={{width:7,height:7,borderRadius:4,background:c.color,display:"inline-block"}}/>{c.name}: {fmt(c.value)}</span>)}</div></div>
