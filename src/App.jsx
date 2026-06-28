@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
 import Login from './Login'
 import Dashboard from './Dashboard'
+import QuickAdd from './QuickAdd'
 
 export default function App() {
   const [session, setSession] = useState(null)
