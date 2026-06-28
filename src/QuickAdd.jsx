@@ -1,8 +1,43 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabaseClient'
 
 // Owner user_id — matches RLS policy that allows anon insert with this UUID
 const OWNER_USER_ID = 'ca0169ae-f0ba-40ce-9ff2-b7dfacce6380'
+
+// Direct Supabase REST endpoint config — bypasses supabase-js client
+// to avoid auth-session hangs. Anon JWT key is safe to expose (already public in app).
+const SUPABASE_URL = 'https://dzmugxoxpoikhtmwqsil.supabase.co'
+const SUPABASE_ANON_JWT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR6bXVneG94cG9pa2h0bXdxc2lsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4ODU0OTQsImV4cCI6MjA5MjQ2MTQ5NH0.Edo_waBaSVOB6_G-i_W0DlA8WLg2ws_3zQAsWNSFBdA'
+
+// Direct insert with explicit timeout (avoids supabase-js hanging)
+const insertTransaction = async (payload, timeoutMs = 10000) => {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/transactions`, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_ANON_JWT,
+        'Authorization': `Bearer ${SUPABASE_ANON_JWT}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=representation',
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    })
+    clearTimeout(timeoutId)
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '')
+      throw new Error(`${res.status}: ${errText || res.statusText}`)
+    }
+    const data = await res.json()
+    return Array.isArray(data) ? data[0] : data
+  } catch (e) {
+    clearTimeout(timeoutId)
+    if (e.name === 'AbortError') throw new Error('Request timed out (10s) — saved offline')
+    throw e
+  }
+}
 
 // Fallback lists if user_settings can't be fetched (RLS or offline)
 const FALLBACK = {
@@ -134,28 +169,41 @@ export default function QuickAdd() {
     if (q.length === 0) return
     console.log('[QuickAdd] Flushing', q.length, 'item(s)')
     const remaining = []
+    let lastError = null
     for (const item of q) {
-      const { error } = await supabase.from('transactions').insert(item)
-      if (error) {
-        console.error('[QuickAdd] Sync failed:', error.message, item)
-        remaining.push(item)
-      } else {
+      try {
+        await insertTransaction(item)
         console.log('[QuickAdd] Synced item ₨' + item.a)
+      } catch (e) {
+        console.error('[QuickAdd] Sync failed:', e.message, item)
+        remaining.push(item)
+        lastError = e.message
       }
     }
     queueSet(remaining)
     setQueueLen(remaining.length)
-    if (remaining.length === 0 && q.length > 0) {
-      showToast('success', `${q.length} queued ${q.length === 1 ? 'transaction' : 'transactions'} synced`)
+    const synced = q.length - remaining.length
+    if (synced > 0 && remaining.length === 0) {
+      showToast('success', `${synced} synced ✓`)
+    } else if (synced > 0 && remaining.length > 0) {
+      showToast('error', `${synced} synced, ${remaining.length} failed: ${lastError}`, 6000)
     } else if (remaining.length > 0) {
-      console.warn('[QuickAdd]', remaining.length, 'item(s) still failing to sync')
-      showToast('error', `${remaining.length} item(s) failed — tap badge to retry`)
+      showToast('error', `Sync failed: ${lastError}`, 6000)
     }
   }
 
-  const showToast = (kind, text) => {
+  const clearQueue = () => {
+    if (!confirm(`Clear ${queueLen} stuck item(s)? Yeh permanently delete kar dega.`)) return
+    queueClear()
+    setQueueLen(0)
+    showToast('queued', 'Queue cleared')
+  }
+
+  const toastTimerRef = useRef(null)
+  const showToast = (kind, text, ms = 3500) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
     setToast({ kind, text })
-    setTimeout(() => setToast(null), 2500)
+    toastTimerRef.current = setTimeout(() => setToast(null), ms)
   }
 
   const isTransfer = type === 'Transfer'
@@ -210,21 +258,17 @@ export default function QuickAdd() {
     }
 
     try {
-      const { data, error } = await supabase
-        .from('transactions')
-        .insert(payload)
-        .select()
-        .single()
-      if (error) throw error
+      const data = await insertTransaction(payload)
       // Replace optimistic entry with real one
       setRecent((r) => [data, ...r.filter((x) => x.id !== optimistic.id)].slice(0, 3))
       showToast('success', `Added ₨${amt.toLocaleString()}`)
       reset()
     } catch (err) {
       // On network/transient error, queue it
+      console.error('[QuickAdd] Submit failed:', err.message)
       const n = queueAdd(payload)
       setQueueLen(n)
-      showToast('queued', `Save failed, queued. ${n} pending.`)
+      showToast('queued', `Failed: ${err.message}. Queued (${n}).`, 5000)
       reset()
     } finally {
       setSaving(false)
@@ -241,16 +285,26 @@ export default function QuickAdd() {
         <div style={S.title}>Quick Add</div>
         <div style={S.statusGroup}>
           {queueLen > 0 && (
-            <button
-              onClick={() => {
-                showToast('queued', 'Syncing…')
-                flushQueue()
-              }}
-              style={S.queueBadge}
-              title="Tap to sync now"
-            >
-              ⏳ {queueLen} · sync
-            </button>
+            <>
+              <button
+                onClick={() => {
+                  showToast('queued', 'Syncing…')
+                  flushQueue()
+                }}
+                style={S.queueBadge}
+                title="Tap to sync"
+              >
+                ⏳ {queueLen} · sync
+              </button>
+              <button
+                onClick={clearQueue}
+                style={S.clearBadge}
+                title="Clear stuck items"
+                aria-label="Clear queue"
+              >
+                ✕
+              </button>
+            </>
           )}
           <span style={{ ...S.dot, background: online ? '#10b981' : '#f59e0b' }} />
           <span style={S.statusText}>{online ? 'Online' : 'Offline'}</span>
@@ -509,6 +563,17 @@ const S = {
     padding: '3px 8px',
     borderRadius: 8,
     fontWeight: 600,
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+  },
+  clearBadge: {
+    fontSize: 11,
+    color: '#f87171',
+    background: 'rgba(239,68,68,.12)',
+    border: '1px solid rgba(239,68,68,.3)',
+    padding: '3px 7px',
+    borderRadius: 8,
+    fontWeight: 700,
     cursor: 'pointer',
     fontFamily: 'inherit',
   },
