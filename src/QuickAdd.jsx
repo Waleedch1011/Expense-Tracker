@@ -13,6 +13,11 @@ const FALLBACK = {
   loan_people: ['Sheikh','Hamza','Papa','Abdullah','Ali','Abdul Office','Fakhar','Shahbaz Bhai','Mughees Editor'],
 }
 
+// Types where money LEAVES an account → show "From Account"
+const EXPENSE_TYPES = ['Expense', 'Loan Given', 'Loan Repaid', 'Savings Deposit']
+// Types where money ENTERS an account → show "To Account"
+const INCOME_TYPES = ['Income', 'Loan Taken', 'Loan Received Back', 'Savings Withdraw']
+
 // Type color mapping (matches dashboard)
 const typeColor = (t) =>
   t === 'Income' ? '#10b981'
@@ -120,7 +125,11 @@ export default function QuickAdd() {
     setTimeout(() => setToast(null), 2500)
   }
 
-  const needsToAcct = type === 'Transfer'
+  const isTransfer = type === 'Transfer'
+  const isIncome = INCOME_TYPES.includes(type)
+  const isExpense = EXPENSE_TYPES.includes(type)
+  const needsFromAcct = isExpense || isTransfer
+  const needsToAcct = isIncome || isTransfer
   const needsParty = type?.includes('Loan')
 
   const reset = () => {
@@ -147,8 +156,8 @@ export default function QuickAdd() {
       a: amt,
       c: category,
       g: group,
-      fa: fromAcct || '',
-      ta: needsToAcct ? toAcct : '',
+      fa: needsFromAcct ? (fromAcct || '') : '',
+      ta: needsToAcct ? (toAcct || '') : '',
       p: needsParty ? party : '',
       description: description || '',
       n: notes || '',
@@ -281,18 +290,20 @@ export default function QuickAdd() {
         </div>
       </section>
 
-      {/* FROM ACCOUNT */}
-      <section style={S.section}>
-        <label style={S.label}>From Account</label>
-        <select value={fromAcct} onChange={(e) => setFromAcct(e.target.value)} style={S.select}>
-          <option value="">— None —</option>
-          {(settings.accounts || FALLBACK.accounts).map((a) => (
-            <option key={a} value={a}>{a}</option>
-          ))}
-        </select>
-      </section>
+      {/* FROM ACCOUNT — for Expense, Transfer, Loan Given/Repaid, Savings Deposit */}
+      {needsFromAcct && (
+        <section style={S.section}>
+          <label style={S.label}>From Account</label>
+          <select value={fromAcct} onChange={(e) => setFromAcct(e.target.value)} style={S.select}>
+            <option value="">— None —</option>
+            {(settings.accounts || FALLBACK.accounts).map((a) => (
+              <option key={a} value={a}>{a}</option>
+            ))}
+          </select>
+        </section>
+      )}
 
-      {/* TO ACCOUNT — only for Transfer */}
+      {/* TO ACCOUNT — for Income, Transfer, Loan Taken/Received, Savings Withdraw */}
       {needsToAcct && (
         <section style={S.section}>
           <label style={S.label}>To Account</label>
