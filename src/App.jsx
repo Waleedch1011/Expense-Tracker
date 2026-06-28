@@ -7,24 +7,41 @@ import QuickAdd from './QuickAdd'
 export default function App() {
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [path, setPath] = useState(window.location.pathname)
+
+  // Quick-add route: no auth needed — uses anon RLS policy with hardcoded user_id
+  const isQuickRoute = path === '/quick' || path === '/quick/'
 
   useEffect(() => {
+    if (isQuickRoute) {
+      setLoading(false)
+      return
+    }
     // Check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       setLoading(false)
     })
-
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
     })
-
     return () => subscription.unsubscribe()
+  }, [isQuickRoute])
+
+  // Listen for back/forward navigation
+  useEffect(() => {
+    const handler = () => setPath(window.location.pathname)
+    window.addEventListener('popstate', handler)
+    return () => window.removeEventListener('popstate', handler)
   }, [])
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
+  }
+
+  if (isQuickRoute) {
+    return <QuickAdd />
   }
 
   if (loading) {
