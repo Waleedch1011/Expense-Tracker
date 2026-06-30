@@ -4,39 +4,24 @@ import { supabase } from './supabaseClient'
 // Owner user_id — matches RLS policy that allows anon insert with this UUID
 const OWNER_USER_ID = 'ca0169ae-f0ba-40ce-9ff2-b7dfacce6380'
 
-// Direct Supabase REST endpoint config — bypasses supabase-js client
-// to avoid auth-session hangs. Anon JWT key is safe to expose (already public in app).
-const SUPABASE_URL = 'https://dzmugxoxpoikhtmwqsil.supabase.co'
-const SUPABASE_ANON_JWT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR6bXVneG94cG9pa2h0bXdxc2lsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4ODU0OTQsImV4cCI6MjA5MjQ2MTQ5NH0.Edo_waBaSVOB6_G-i_W0DlA8WLg2ws_3zQAsWNSFBdA'
-
-// Direct insert with explicit timeout (avoids supabase-js hanging)
+// Direct insert with explicit timeout — uses supabase-js (leverages auth session if any)
+// with Promise.race timeout to prevent hanging.
 const insertTransaction = async (payload, timeoutMs = 10000) => {
-  const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
-  try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/transactions`, {
-      method: 'POST',
-      headers: {
-        'apikey': SUPABASE_ANON_JWT,
-        'Authorization': `Bearer ${SUPABASE_ANON_JWT}`,
-        'Content-Type': 'application/json',
-        'Prefer': 'return=representation',
-      },
-      body: JSON.stringify(payload),
-      signal: controller.signal,
+  const insertPromise = supabase
+    .from('transactions')
+    .insert(payload)
+    .select()
+    .single()
+    .then(({ data, error }) => {
+      if (error) throw new Error(error.message || 'Insert failed')
+      return data
     })
-    clearTimeout(timeoutId)
-    if (!res.ok) {
-      const errText = await res.text().catch(() => '')
-      throw new Error(`${res.status}: ${errText || res.statusText}`)
-    }
-    const data = await res.json()
-    return Array.isArray(data) ? data[0] : data
-  } catch (e) {
-    clearTimeout(timeoutId)
-    if (e.name === 'AbortError') throw new Error('Request timed out (10s) — saved offline')
-    throw e
-  }
+
+  const timeoutPromise = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('Request timed out (10s)')), timeoutMs)
+  )
+
+  return Promise.race([insertPromise, timeoutPromise])
 }
 
 // Fallback lists if user_settings can't be fetched (RLS or offline)
