@@ -7,7 +7,22 @@ import QuickAdd from './QuickAdd'
 export default function App() {
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [path, setPath] = useState(window.location.pathname)
+  // Detect if launched as standalone PWA (Android Chrome or iOS Safari home screen)
+  const initialStandalone =
+    typeof window !== 'undefined' &&
+    (window.matchMedia?.('(display-mode: standalone)').matches ||
+      window.navigator.standalone === true)
+  // If standalone and on root, redirect to /quick immediately
+  const initialPath = (() => {
+    if (typeof window === 'undefined') return '/'
+    const p = window.location.pathname
+    if (initialStandalone && (p === '/' || p === '')) {
+      window.history.replaceState({}, '', '/quick')
+      return '/quick'
+    }
+    return p
+  })()
+  const [path, setPath] = useState(initialPath)
 
   // Quick-add route: no auth needed — uses anon RLS policy with hardcoded user_id
   const isQuickRoute = path === '/quick' || path === '/quick/'
