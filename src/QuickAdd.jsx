@@ -1,44 +1,46 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { createClient } from '@supabase/supabase-js'
 import { supabase } from './supabaseClient'
 
-// Separate anon-only client — no session persistence, always sends requests
-// as anonymous. Prevents stale auth from interfering with QuickAdd inserts.
 const SUPABASE_URL = 'https://dzmugxoxpoikhtmwqsil.supabase.co'
 const SUPABASE_KEY = 'sb_publishable_rZ6i0A3aKdcqj8bzSj6bMg_41VEknhQ'
-const anonClient = createClient(SUPABASE_URL, SUPABASE_KEY, {
-  auth: {
-    persistSession: false,
-    autoRefreshToken: false,
-    detectSessionInUrl: false,
-  },
-})
 
 // Owner user_id — matches RLS policy that allows insert with this UUID
 const OWNER_USER_ID = 'ca0169ae-f0ba-40ce-9ff2-b7dfacce6380'
 
-// Insert with 10s timeout using the anon-only client
+// Direct fetch to Supabase REST — sends ONLY apikey header (no Authorization).
+// This ensures the request is treated as pure anonymous, matching the SET LOCAL ROLE anon test.
 const insertTransaction = async (payload, timeoutMs = 10000) => {
-  console.log('[QuickAdd] Inserting via anon client:', payload)
-  const insertPromise = anonClient
-    .from('transactions')
-    .insert(payload)
-    .select()
-    .single()
-    .then(({ data, error }) => {
-      if (error) {
-        console.error('[QuickAdd] Insert error:', error)
-        throw new Error(error.message || 'Insert failed')
-      }
-      console.log('[QuickAdd] Insert success:', data)
-      return data
+  console.log('[QuickAdd] Payload:', payload)
+
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/transactions`, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=representation',
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
     })
+    clearTimeout(timeoutId)
 
-  const timeoutPromise = new Promise((_, reject) =>
-    setTimeout(() => reject(new Error('Request timed out (10s)')), timeoutMs)
-  )
+    const text = await res.text()
+    console.log('[QuickAdd] Response:', res.status, text.substring(0, 200))
 
-  return Promise.race([insertPromise, timeoutPromise])
+    if (!res.ok) {
+      throw new Error(`${res.status}: ${text || res.statusText}`)
+    }
+    const data = text ? JSON.parse(text) : null
+    return Array.isArray(data) ? data[0] : data
+  } catch (e) {
+    clearTimeout(timeoutId)
+    if (e.name === 'AbortError') throw new Error('Timeout (10s)')
+    throw e
+  }
 }
 
 // Fallback lists if user_settings can't be fetched (RLS or offline)
