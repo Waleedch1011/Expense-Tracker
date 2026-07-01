@@ -1,19 +1,36 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createClient } from '@supabase/supabase-js'
 import { supabase } from './supabaseClient'
 
-// Owner user_id — matches RLS policy that allows anon insert with this UUID
+// Separate anon-only client — no session persistence, always sends requests
+// as anonymous. Prevents stale auth from interfering with QuickAdd inserts.
+const SUPABASE_URL = 'https://dzmugxoxpoikhtmwqsil.supabase.co'
+const SUPABASE_KEY = 'sb_publishable_rZ6i0A3aKdcqj8bzSj6bMg_41VEknhQ'
+const anonClient = createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false,
+    detectSessionInUrl: false,
+  },
+})
+
+// Owner user_id — matches RLS policy that allows insert with this UUID
 const OWNER_USER_ID = 'ca0169ae-f0ba-40ce-9ff2-b7dfacce6380'
 
-// Direct insert with explicit timeout — uses supabase-js (leverages auth session if any)
-// with Promise.race timeout to prevent hanging.
+// Insert with 10s timeout using the anon-only client
 const insertTransaction = async (payload, timeoutMs = 10000) => {
-  const insertPromise = supabase
+  console.log('[QuickAdd] Inserting via anon client:', payload)
+  const insertPromise = anonClient
     .from('transactions')
     .insert(payload)
     .select()
     .single()
     .then(({ data, error }) => {
-      if (error) throw new Error(error.message || 'Insert failed')
+      if (error) {
+        console.error('[QuickAdd] Insert error:', error)
+        throw new Error(error.message || 'Insert failed')
+      }
+      console.log('[QuickAdd] Insert success:', data)
       return data
     })
 
